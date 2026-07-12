@@ -188,18 +188,17 @@ def sync():
 
 class Handler(SimpleHTTPRequestHandler):
     def do_GET(self):
-        if self.path == "/":
-            return self.respond((HQ / "web" / "home.html").read_text(encoding="utf-8"),"text/html")
-        if self.path == "/operations":
-            return self.respond((HQ / "web" / "operations.html").read_text(encoding="utf-8"),"text/html")
-        if self.path == "/cloud":
-            return self.respond((HQ / "web" / "index.html").read_text(encoding="utf-8"),"text/html")
-        if self.path == "/ledger":
-            return self.respond((HQ / "web" / "ledger.html").read_text(encoding="utf-8"),"text/html")
-        if self.path.startswith("/actions"):
-            return self.respond((HQ / "web" / "actions.html").read_text(encoding="utf-8"),"text/html")
-        if self.path == "/readiness":
-            return self.respond((HQ / "web" / "readiness.html").read_text(encoding="utf-8"),"text/html")
+        parsed = urlparse(self.path).path
+        routes = {
+            "/": "index.html", "/ledger": "ledger.html", "/wardrobe": "wardrobe.html",
+            "/operations": "operations.html", "/actions": "actions.html", "/system": "system.html",
+        }
+        routes.update({f"/{filename}": filename for filename in routes.values()})
+        if parsed in routes:
+            return self.respond((HQ / "web" / routes[parsed]).read_text(encoding="utf-8"), "text/html")
+        if parsed in {"/hq.css", "/hq.js"}:
+            content_type = "text/css" if parsed.endswith(".css") else "application/javascript"
+            return self.respond((HQ / "web" / parsed.lstrip("/")).read_text(encoding="utf-8"), content_type)
         if self.path in {"/api/health", "/api/link-suggestions"}:
             filename = "health_latest.json" if self.path == "/api/health" else "link_suggestions_latest.json"
             report = HQ / "reports" / filename
