@@ -60,7 +60,7 @@ def recent_reference_scope_count():
 
 def prior_snapshot_ids(vinted_ids):
     if not vinted_ids: return set()
-    response = requests.get(f"{SUPABASE_URL}/rest/v1/hq_listing_snapshots", headers={"apikey": SERVICE_KEY, "Authorization": f"Bearer {SERVICE_KEY}"}, params={"select":"vinted_item_id", "vinted_item_id":f"in.({','.join(vinted_ids)})", "limit":"1000"}, timeout=60)
+    response = requests.get(f"{SUPABASE_URL}/rest/v1/hq_listing_snapshots", headers={"apikey": SERVICE_KEY, "Authorization": f"Bearer {SERVICE_KEY}"}, params={"select":"vinted_item_id", "vinted_item_id":f"in.({','.join(vinted_ids)})", "order":"captured_at.desc", "limit":"250"}, timeout=60)
     response.raise_for_status()
     return {str(row["vinted_item_id"]) for row in response.json()}
 
