@@ -52,7 +52,7 @@ export async function data(){
     live_list_price:item.live_list_price??null
   }));
   const allSnapshots=snapshots||[];
-  const cloudSnapshots=allSnapshots.filter(snapshot=>snapshot.source==='github_actions_vinted');
+  const cloudSnapshots=allSnapshots.filter(snapshot=>String(snapshot.source||'').startsWith('github_actions_vinted'));
   const cyclePool=cloudSnapshots.length?cloudSnapshots:allSnapshots;
   const cycleTimes=[...new Set(cyclePool.map(snapshot=>snapshot.captured_at).filter(Boolean))].sort().reverse();
   const latestCapturedAt=cycleTimes[0]||'';

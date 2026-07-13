@@ -25,15 +25,31 @@ def amount(value):
     try: return float(str(value).replace(",", "."))
     except (TypeError, ValueError): return None
 
-def fetch_items():
-    session = cloudscraper.create_scraper(); session.get("https://www.vinted.pl", headers=HEADERS, timeout=30)
-    endpoint = "https://www.vinted.pl/api/v2/catalog/items"; page = 1; anchor = time.time(); total_pages = 1; items = []
+def fetch_items(session=None):
+    session = session or cloudscraper.create_scraper()
+    session.get("https://www.vinted.pl", headers=HEADERS, timeout=30)
+    endpoint = "https://www.vinted.pl/api/v2/catalog/items"; page = 1; anchor = time.time(); total_pages = 1; total_entries = None; items = []
     while page <= total_pages:
         response = session.get(endpoint, params={"user_ids[]": USER_ID, "page": page, "per_page": 96, "time": anchor, "order": "newest_first"}, headers=HEADERS, timeout=30)
         response.raise_for_status(); payload = response.json(); batch = payload.get("items") or []
         if any((item.get("user") or {}).get("id") != USER_ID for item in batch): raise RuntimeError("Refusing mixed-seller Vinted response")
-        items.extend(batch); pagination = payload.get("pagination") or {}; total_pages = int(pagination.get("total_pages") or page); anchor = pagination.get("time") or anchor; page += 1
-    return {int(item["id"]): item for item in items}.values()
+        pagination = payload.get("pagination") or {}
+        advertised_pages = int(pagination.get("total_pages") or page)
+        advertised_entries = pagination.get("total_entries")
+        if advertised_pages < page:
+            raise RuntimeError(f"Invalid Vinted pagination: page {page} exceeds advertised total {advertised_pages}")
+        if advertised_entries is not None:
+            advertised_entries = int(advertised_entries)
+            if total_entries is not None and total_entries != advertised_entries:
+                raise RuntimeError(f"Vinted total changed mid-pull: {total_entries} -> {advertised_entries}")
+            total_entries = advertised_entries
+        if not batch and page < advertised_pages:
+            raise RuntimeError(f"Partial Vinted pagination: page {page}/{advertised_pages} was empty")
+        items.extend(batch); total_pages = advertised_pages; anchor = pagination.get("time") or anchor; page += 1
+    unique = {int(item["id"]): item for item in items}
+    if total_entries is not None and len(unique) != total_entries:
+        raise RuntimeError(f"Partial Vinted pagination: expected {total_entries} unique items, got {len(unique)}")
+    return unique.values()
 
 def recent_reference_scope_count():
     response = requests.get(
@@ -69,6 +85,36 @@ def eligible_unlisted_items():
     response.raise_for_status()
     return response.json()
 
+def manually_confirmed_missing_listings(catalog_ids):
+    """Keep an explicit human confirmation visible when Vinted's catalog omits it.
+
+    This is intentionally limited to items still marked LISTED whose Vinted ID
+    is absent from the current catalog response and which have an explicit
+    manual active-confirmation audit event. It never invents a sale or silently
+    creates a new mapping.
+    """
+    headers = {"apikey": SERVICE_KEY, "Authorization": f"Bearer {SERVICE_KEY}"}
+    items_response = requests.get(
+        f"{SUPABASE_URL}/rest/v1/hq_ledger_items", headers=headers,
+        params={"select":"item_id,vinted_item_id,listing_url,live_title,live_list_price", "ledger_status":"eq.LISTED-BACKLOG", "vinted_item_id":"not.is.null", "limit":"1000"}, timeout=60,
+    )
+    items_response.raise_for_status()
+    missing = [item for item in items_response.json() if str(item["vinted_item_id"]) not in catalog_ids]
+    if not missing:
+        return []
+    item_ids = ",".join(item["item_id"] for item in missing)
+    events_response = requests.get(
+        f"{SUPABASE_URL}/rest/v1/hq_ledger_events", headers=headers,
+        params={"select":"item_id,detail", "item_id":f"in.({item_ids})", "event_type":"eq.LISTED", "source":"eq.MANUAL", "limit":"1000"}, timeout=60,
+    )
+    events_response.raise_for_status()
+    manually_confirmed = {
+        row["item_id"] for row in events_response.json()
+        if "manually confirmed this listing is currently active" in str(row.get("detail") or "").lower()
+        or str(row.get("detail") or "").startswith("ACTIVE_CONFIRMATION:")
+    }
+    return [item for item in missing if item["item_id"] in manually_confirmed]
+
 def fetch_new_listing_description(vinted_id):
     """Read public item-page metadata only for a just-discovered listing."""
     # The catalog snapshot is still useful when an individual item page is
@@ -102,6 +148,12 @@ def main():
     reference_count = recent_reference_scope_count()
     if reference_count is not None and len(rows) < reference_count - 1:
         raise RuntimeError(f"Refusing partial Vinted snapshot: {len(rows)} DEN items against recent reference {reference_count}; expected at most one removal between runs")
+    catalog_ids = {str(item["id"]) for item in live_items}
+    overrides = manually_confirmed_missing_listings(catalog_ids)
+    for item in overrides:
+        rows.append({"vinted_item_id": str(item["vinted_item_id"]), "captured_at": captured_at, "title": item.get("live_title") or item["item_id"], "price_pln": amount(item.get("live_list_price")), "views": 0, "favourites": 0, "visible": True, "photo_url": None, "source": "github_actions_vinted_manual_override"})
+    if overrides:
+        print(f"Kept {len(overrides)} manually confirmed active listing(s) visible after catalog omission: {', '.join(item['item_id'] for item in overrides)}")
     seen_before = prior_snapshot_ids([str(item["id"]) for item in live_items])
     response = requests.post(f"{SUPABASE_URL}/rest/v1/hq_listing_snapshots?on_conflict=vinted_item_id,captured_at", headers={"apikey": SERVICE_KEY, "Authorization": f"Bearer {SERVICE_KEY}", "Content-Type": "application/json", "Prefer": "resolution=merge-duplicates,return=minimal"}, json=rows, timeout=60)
     response.raise_for_status(); print(f"Uploaded {len(rows)} DEN-scope Vinted snapshots at {captured_at}")
