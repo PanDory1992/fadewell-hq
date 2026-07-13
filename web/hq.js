@@ -19,7 +19,13 @@ export async function shell(active){
   if(!session){$('status').textContent='Zaloguj się przez GitHub, aby otworzyć prywatny prototyp HQ.';return false;}
   const {data:owner,error}=await sb.rpc('claim_first_hq_owner');
   if(error||!owner){$('status').textContent=error?.message||'To konto nie ma dostępu ownera.';return false;}
-  $('login').hidden=true;$('logout').hidden=false;$('status').textContent=session.user.email||'HQ owner';return true;
+  $('login').hidden=true;$('logout').hidden=false;$('status').textContent=session.user.email||'HQ owner';
+  if(active!=='actions.html'){
+    let lastRefresh=Date.now();
+    window.setInterval(()=>{lastRefresh=Date.now();location.reload();},60000);
+    document.addEventListener('visibilitychange',()=>{if(!document.hidden&&Date.now()-lastRefresh>10000){lastRefresh=Date.now();location.reload();}});
+  }
+  return true;
 }
 
 export async function data(){
@@ -43,10 +49,15 @@ export async function data(){
     sold_on:item.sold_on||null,
     live_list_price:item.live_list_price??null
   }));
-  const latest=new Map();
-  (snapshots||[]).forEach(snapshot=>{const id=String(snapshot.vinted_item_id||'');if(id&&!latest.has(id))latest.set(id,snapshot);});
-  const live=[...latest.values()];
-  return {items,snapshots:live,reviews:reviews||[],source,linked:new Map(items.filter(item=>item.vinted_item_id).map(item=>[String(item.vinted_item_id),item]))};
+  const allSnapshots=snapshots||[];
+  const cloudSnapshots=allSnapshots.filter(snapshot=>snapshot.source==='github_actions_vinted');
+  const cyclePool=cloudSnapshots.length?cloudSnapshots:allSnapshots;
+  const latestCapturedAt=cyclePool.reduce((latest,snapshot)=>!latest||snapshot.captured_at>latest?snapshot.captured_at:latest,'');
+  const linked=new Map(items.filter(item=>item.vinted_item_id).map(item=>[String(item.vinted_item_id),item]));
+  const live=cyclePool.filter(snapshot=>snapshot.captured_at===latestCapturedAt&&linked.get(String(snapshot.vinted_item_id))?.ledger_status!=='SOLD');
+  const liveIds=new Set(live.map(snapshot=>String(snapshot.vinted_item_id)));
+  const missing=items.filter(item=>item.ledger_status==='LISTED-BACKLOG'&&item.vinted_item_id&&!liveIds.has(String(item.vinted_item_id)));
+  return {items,snapshots:live,reviews:reviews||[],source,linked,missing,latestCapturedAt};
 }
 
 export const statusClass=status=>status==='SOLD'?'sold':status==='LISTED-BACKLOG'?'listed':'unlisted';

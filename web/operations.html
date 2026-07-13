@@ -1,3 +1,62 @@
-<!doctype html><html lang="pl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Operations · HQ</title><link rel="stylesheet" href="hq.css"><main>
-<header class="top"><div><div class="eyebrow">FADEWELL HQ</div><h1>Operations</h1><p class="muted">Jedna kolejka wyjątków: relisty, brakujące mapowania i listingi wymagające sprawdzenia.</p></div><span class="badge">Prototyp równoległy</span></header><nav id="nav"></nav><div class="row-actions"><button id="login">Zaloguj przez GitHub</button><button id="logout" hidden class="secondary">Wyloguj</button><span id="status" class="muted small"></span></div>
-<section id="app" hidden><div class="section-title"><h2>Nowe listingi do połączenia</h2><span id="count" class="muted small"></span></div><p class="notice small">Wybierz właściwy DEN tylko wtedy, gdy masz pewność. Połączenie zapisuje Vinted ID, URL, tytuł i cenę oraz ustawia item jako wystawiony. Nie zmienia niczego na Vinted.</p><div id="unlinked" class="stack"></div><div class="section-title"><h2>Pozostałe sprawy</h2><span id="reviewCount" class="muted small"></span></div><div id="queue" class="stack"></div><article class="card"><h2>Jak czytać kolejkę</h2><div class="two-col"><p class="muted small"><b>Missing</b><br>Oferta zniknęła z snapshotu. To może być sprzedaż, ukrycie albo relist — nie traktuj automatycznie jako SOLD.</p><p class="muted small"><b>Unlinked live</b><br>Oferta jest widoczna na Vinted, lecz nie ma jeszcze pewnego połączenia z itemem DEN. Nie zgaduj po samym tytule.</p></div></article></section></main><script type="module">import{shell,data,$,safe,date,money,sb}from'./hq.js';let state;const vintedUrl=id=>`https://www.vinted.pl/items/${encodeURIComponent(id)}`;function denOptions(items){return'<option value="">Wybierz DEN…</option>'+items.filter(item=>item.ledger_status!=='SOLD').map(item=>`<option value="${safe(item.item_id)}">${safe(item.item_id)} · ${safe(item.name||'Bez nazwy')}</option>`).join('');}function render(){const unlinkedListings=state.snapshots.filter(row=>!state.linked.has(String(row.vinted_item_id)));count.textContent=`${unlinkedListings.length} do połączenia`;unlinked.innerHTML=unlinkedListings.length?unlinkedListings.map(row=>`<article class="card"><div class="row-actions"><span class="status unlisted">UNLINKED LIVE</span><b>${safe(row.vinted_item_id)}</b><a class="text-link small" href="${safe(vintedUrl(row.vinted_item_id))}" target="_blank" rel="noreferrer">Otwórz Vinted</a></div><div class="two-col"><div>${row.photo_url?`<img class="photo large" src="${safe(row.photo_url)}" alt="">`:''}</div><div><h3>${safe(row.title||'Bez tytułu')}</h3><p><b>${money(row.price_pln)}</b> <span class="muted small">· ${safe(row.views||0)} views · ${safe(row.favourites||0)} likes</span></p><label>Połącz z itemem DEN<select data-den="${safe(row.vinted_item_id)}">${denOptions(state.items)}</select></label><p><button data-link="${safe(row.vinted_item_id)}">Połącz z ofertą</button></p><p id="result-${safe(row.vinted_item_id)}" class="muted small"></p></div></div></article>`).join(''):'<article class="card empty"><b class="ok">✓ Wszystkie aktualne listingi DEN są połączone.</b><p>Nowe ręcznie wystawione oferty pojawią się tutaj po kolejnym snapshotcie Vinted.</p></article>';reviewCount.textContent=`${state.reviews.length} otwartych spraw`;queue.innerHTML=state.reviews.length?state.reviews.map(review=>`<article class="card"><div class="row-actions"><span class="status unlisted">${safe(review.kind||'REVIEW')}</span><b>${safe(review.item_id||review.vinted_item_id||'Bez identyfikatora')}</b><span class="muted small">${safe(date(review.created_at))}</span></div><p>${safe(review.detail||'Brak opisu.')}</p><p class="muted small">Ta sprawa pozostaje w kolejce do czasu potwierdzenia przez porównanie z aktualnym Vinted.</p></article>`).join(''):'<article class="card empty"><b class="ok">✓ Kolejka jest czysta.</b><p>Brak nierozstrzygniętych wyjątków.</p></article>';unlinked.querySelectorAll('button[data-link]').forEach(button=>button.onclick=()=>link(button.dataset.link));}async function link(vintedId){const row=state.snapshots.find(snapshot=>String(snapshot.vinted_item_id)===String(vintedId));const select=unlinked.querySelector(`select[data-den="${CSS.escape(String(vintedId))}"]`);const result=$(`result-${vintedId}`);if(!select?.value){result.className='bad small';result.textContent='Najpierw wybierz DEN.';return;}const chosen=state.items.find(item=>item.item_id===select.value);if(!chosen||chosen.ledger_status==='SOLD'){result.className='bad small';result.textContent='Wybierz aktywny item DEN.';return;}const button=unlinked.querySelector(`button[data-link="${CSS.escape(String(vintedId))}"]`);button.disabled=true;result.className='muted small';result.textContent='Zapisuję połączenie…';const payload={action_type:'LISTED',item_id:chosen.item_id,occurred_on:new Date().toISOString().slice(0,10),amount:row.price_pln??null,vinted_item_id:String(row.vinted_item_id),listing_url:vintedUrl(row.vinted_item_id),live_title:row.title||null,note:`Operations: ręczne połączenie live listingu ${row.vinted_item_id}.`,external_key:`operations-link-${row.vinted_item_id}`};const{error}=await sb.rpc('apply_hq_ledger_action_owner',{p:payload});if(error){button.disabled=false;result.className='bad small';result.textContent=`Nie zapisano: ${error.message||'nieznany błąd'}.`;return;}result.className='ok small';result.textContent=`Połączono z ${chosen.item_id}.`;state=await data();render();}if(await shell('operations.html')){app.hidden=false;try{state=await data();render();}catch(error){app.innerHTML=`<div class="notice">Nie udało się wczytać kolejki: ${safe(error.message||error)}</div>`;}}</script></html>
+<!doctype html>
+<html lang="pl">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Operations · HQ</title>
+<link rel="stylesheet" href="hq.css">
+<main>
+  <header class="top"><div><div class="eyebrow">FADEWELL HQ</div><h1>Operations</h1><p class="muted">Jedna kolejka wyjątków: relisty, brakujące mapowania i listingi wymagające sprawdzenia.</p></div><span class="badge">Prototyp równoległy</span></header>
+  <nav id="nav"></nav>
+  <div class="row-actions"><button id="login">Zaloguj przez GitHub</button><button id="logout" hidden class="secondary">Wyloguj</button><span id="status" class="muted small"></span></div>
+  <section id="app" hidden>
+    <div class="section-title"><h2>Nowe listingi do połączenia</h2><span id="count" class="muted small"></span></div>
+    <p class="notice small">Wybierz właściwy DEN tylko wtedy, gdy masz pewność. Połączenie zapisuje Vinted ID, URL, tytuł i cenę oraz ustawia item jako wystawiony. Nie zmienia niczego na Vinted.</p>
+    <div id="unlinked" class="stack"></div>
+    <div class="section-title"><h2>Pozostałe sprawy</h2><span id="reviewCount" class="muted small"></span></div>
+    <div id="queue" class="stack"></div>
+    <article class="card"><h2>Jak czytać kolejkę</h2><div class="two-col"><p class="muted small"><b>Missing live</b><br>Połączony listing nie wystąpił w ostatnim pełnym snapshotcie. Może to być sprzedaż, ukrycie albo relist — nie zmienia automatycznie statusu na SOLD.</p><p class="muted small"><b>Unlinked live</b><br>Oferta jest widoczna na Vinted, lecz nie ma jeszcze pewnego połączenia z itemem DEN. Nie zgaduj po samym tytule.</p></div></article>
+  </section>
+</main>
+<script type="module">
+import {shell,data,$,safe,date,money,sb} from './hq.js';
+
+let state;
+const vintedUrl=id=>`https://www.vinted.pl/items/${encodeURIComponent(id)}`;
+const denOptions=items=>'<option value="">Wybierz DEN…</option>'+items.filter(item=>item.ledger_status!=='SOLD').map(item=>`<option value="${safe(item.item_id)}">${safe(item.item_id)} · ${safe(item.name||'Bez nazwy')}</option>`).join('');
+
+function missingCard(item){
+  return `<article class="card"><div class="row-actions"><span class="status unlisted">MISSING LIVE</span><b>${safe(item.item_id)}</b><span class="muted small">brak w snapshotcie ${safe(date(state.latestCapturedAt))}</span></div><h3>${safe(item.name||'Bez nazwy')}</h3><p class="muted small">Najpierw sprawdź Vinted: to może być sprzedaż, ukrycie albo relist. Jeśli sprzedaż jest potwierdzona, zapisz ją ręcznie z właściwą ceną.</p><p class="row-actions"><a class="button" href="actions.html?item=${encodeURIComponent(item.item_id)}">Sprawdź i zapisz akcję</a>${item.listing_url?`<a class="button secondary" target="_blank" rel="noreferrer" href="${safe(item.listing_url)}">Otwórz ostatnią ofertę</a>`:''}</p></article>`;
+}
+
+function render(){
+  const unlinkedListings=state.snapshots.filter(row=>!state.linked.has(String(row.vinted_item_id)));
+  const missingItems=state.missing||[];
+  count.textContent=`${unlinkedListings.length} do połączenia · snapshot ${date(state.latestCapturedAt)}`;
+  unlinked.innerHTML=unlinkedListings.length?unlinkedListings.map(row=>`<article class="card"><div class="row-actions"><span class="status unlisted">UNLINKED LIVE</span><b>${safe(row.vinted_item_id)}</b><a class="text-link small" href="${safe(vintedUrl(row.vinted_item_id))}" target="_blank" rel="noreferrer">Otwórz Vinted</a></div><div class="two-col"><div>${row.photo_url?`<img class="photo large" src="${safe(row.photo_url)}" alt="">`:''}</div><div><h3>${safe(row.title||'Bez tytułu')}</h3><p><b>${money(row.price_pln)}</b> <span class="muted small">· ${safe(row.views||0)} views · ${safe(row.favourites||0)} likes</span></p><label>Połącz z itemem DEN<select data-den="${safe(row.vinted_item_id)}">${denOptions(state.items)}</select></label><p><button data-link="${safe(row.vinted_item_id)}">Połącz z ofertą</button></p><p id="result-${safe(row.vinted_item_id)}" class="muted small"></p></div></div></article>`).join(''):'<article class="card empty"><b class="ok">✓ Wszystkie aktualne listingi DEN są połączone.</b><p>Nowe ręcznie wystawione oferty pojawią się tutaj po kolejnym snapshotcie Vinted.</p></article>';
+  reviewCount.textContent=`${missingItems.length+state.reviews.length} otwartych spraw`;
+  const storedReviews=state.reviews.map(review=>`<article class="card"><div class="row-actions"><span class="status unlisted">${safe(review.kind||'REVIEW')}</span><b>${safe(review.item_id||review.vinted_item_id||'Bez identyfikatora')}</b><span class="muted small">${safe(date(review.created_at))}</span></div><p>${safe(review.detail||'Brak opisu.')}</p></article>`).join('');
+  queue.innerHTML=(missingItems.map(missingCard).join('')+storedReviews)||'<article class="card empty"><b class="ok">✓ Kolejka jest czysta.</b><p>Brak nierozstrzygniętych wyjątków.</p></article>';
+  unlinked.querySelectorAll('button[data-link]').forEach(button=>button.onclick=()=>link(button.dataset.link));
+}
+
+async function link(vintedId){
+  const row=state.snapshots.find(snapshot=>String(snapshot.vinted_item_id)===String(vintedId));
+  const select=unlinked.querySelector(`select[data-den="${CSS.escape(String(vintedId))}"]`);
+  const result=$(`result-${vintedId}`);
+  if(!select?.value){result.className='bad small';result.textContent='Najpierw wybierz DEN.';return;}
+  const chosen=state.items.find(item=>item.item_id===select.value);
+  if(!chosen||chosen.ledger_status==='SOLD'){result.className='bad small';result.textContent='Wybierz aktywny item DEN.';return;}
+  const button=unlinked.querySelector(`button[data-link="${CSS.escape(String(vintedId))}"]`);
+  button.disabled=true;result.className='muted small';result.textContent='Zapisuję połączenie…';
+  const payload={action_type:'LISTED',item_id:chosen.item_id,occurred_on:new Date().toISOString().slice(0,10),amount:row.price_pln??null,vinted_item_id:String(row.vinted_item_id),listing_url:vintedUrl(row.vinted_item_id),live_title:row.title||null,note:`Operations: ręczne połączenie live listingu ${row.vinted_item_id}.`,external_key:`operations-link-${row.vinted_item_id}`};
+  const {error}=await sb.rpc('apply_hq_ledger_action_owner',{p:payload});
+  if(error){button.disabled=false;result.className='bad small';result.textContent=`Nie zapisano: ${error.message||'nieznany błąd'}.`;return;}
+  state=await data();render();
+}
+
+if(await shell('operations.html')){
+  app.hidden=false;
+  try{state=await data();render();}catch(error){app.innerHTML=`<div class="notice">Nie udało się wczytać kolejki: ${safe(error.message||error)}</div>`;}
+}
+</script>
+</html>
