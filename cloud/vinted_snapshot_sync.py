@@ -34,7 +34,7 @@ def fetch_items():
         items.extend(batch); pagination = payload.get("pagination") or {}; total_pages = int(pagination.get("total_pages") or page); anchor = pagination.get("time") or anchor; page += 1
     return {int(item["id"]): item for item in items}.values()
 
-def previous_scope_count():
+def recent_reference_scope_count():
     response = requests.get(
         f"{SUPABASE_URL}/rest/v1/hq_listing_snapshots",
         headers={"apikey": SERVICE_KEY, "Authorization": f"Bearer {SERVICE_KEY}"},
@@ -45,8 +45,17 @@ def previous_scope_count():
     rows = response.json()
     if not rows:
         return None
-    latest = rows[0]["captured_at"]
-    return sum(row.get("captured_at") == latest for row in rows)
+    counts = {}
+    ordered_cycles = []
+    for row in rows:
+        captured_at = row.get("captured_at")
+        if captured_at not in counts:
+            if len(ordered_cycles) == 2:
+                break
+            counts[captured_at] = 0
+            ordered_cycles.append(captured_at)
+        counts[captured_at] += 1
+    return max(counts[captured_at] for captured_at in ordered_cycles[:2])
 
 def main():
     excluded = set(SCOPE["excluded_live_vinted_ids"]); captured_at = datetime.now(timezone.utc).isoformat(); rows = []
@@ -55,9 +64,9 @@ def main():
         if item_id in excluded: continue
         photo = item.get("photo") or {}; high = photo.get("high_resolution") or {}
         rows.append({"vinted_item_id": item_id, "captured_at": captured_at, "title": item.get("title"), "price_pln": amount(item.get("price")), "views": item.get("view_count") or 0, "favourites": item.get("favourite_count") or 0, "visible": bool(item.get("is_visible", True)), "photo_url": high.get("url") or photo.get("url"), "source": "github_actions_vinted"})
-    previous_count = previous_scope_count()
-    if previous_count is not None and len(rows) < previous_count - 1:
-        raise RuntimeError(f"Refusing partial Vinted snapshot: {len(rows)} DEN items after {previous_count}; expected at most one removal between runs")
+    reference_count = recent_reference_scope_count()
+    if reference_count is not None and len(rows) < reference_count - 1:
+        raise RuntimeError(f"Refusing partial Vinted snapshot: {len(rows)} DEN items against recent reference {reference_count}; expected at most one removal between runs")
     response = requests.post(f"{SUPABASE_URL}/rest/v1/hq_listing_snapshots?on_conflict=vinted_item_id,captured_at", headers={"apikey": SERVICE_KEY, "Authorization": f"Bearer {SERVICE_KEY}", "Content-Type": "application/json", "Prefer": "resolution=merge-duplicates,return=minimal"}, json=rows, timeout=60)
     response.raise_for_status(); print(f"Uploaded {len(rows)} DEN-scope Vinted snapshots at {captured_at}")
 
