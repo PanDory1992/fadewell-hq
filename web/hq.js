@@ -52,12 +52,27 @@ export async function data(){
   const allSnapshots=snapshots||[];
   const cloudSnapshots=allSnapshots.filter(snapshot=>snapshot.source==='github_actions_vinted');
   const cyclePool=cloudSnapshots.length?cloudSnapshots:allSnapshots;
-  const latestCapturedAt=cyclePool.reduce((latest,snapshot)=>!latest||snapshot.captured_at>latest?snapshot.captured_at:latest,'');
+  const cycleTimes=[...new Set(cyclePool.map(snapshot=>snapshot.captured_at).filter(Boolean))].sort().reverse();
+  const latestCapturedAt=cycleTimes[0]||'';
+  const previousCapturedAt=cycleTimes[1]||'';
+  const latestCycle=cyclePool.filter(snapshot=>snapshot.captured_at===latestCapturedAt);
+  const previousCycle=cyclePool.filter(snapshot=>snapshot.captured_at===previousCapturedAt);
   const linked=new Map(items.filter(item=>item.vinted_item_id).map(item=>[String(item.vinted_item_id),item]));
-  const live=cyclePool.filter(snapshot=>snapshot.captured_at===latestCapturedAt&&linked.get(String(snapshot.vinted_item_id))?.ledger_status!=='SOLD');
-  const liveIds=new Set(live.map(snapshot=>String(snapshot.vinted_item_id)));
-  const missing=items.filter(item=>item.ledger_status==='LISTED-BACKLOG'&&item.vinted_item_id&&!liveIds.has(String(item.vinted_item_id)));
-  return {items,snapshots:live,reviews:reviews||[],source,linked,missing,latestCapturedAt};
+  const latestIds=new Set(latestCycle.map(snapshot=>String(snapshot.vinted_item_id)));
+  const previousIds=new Set(previousCycle.map(snapshot=>String(snapshot.vinted_item_id)));
+  const liveById=new Map(latestCycle.map(snapshot=>[String(snapshot.vinted_item_id),snapshot]));
+  const pendingConfirmation=[];
+  previousCycle.forEach(snapshot=>{
+    const id=String(snapshot.vinted_item_id);
+    const item=linked.get(id);
+    if(!latestIds.has(id)&&item?.ledger_status!=='SOLD'){
+      liveById.set(id,{...snapshot,pending_confirmation:true});
+      pendingConfirmation.push(id);
+    }
+  });
+  const live=[...liveById.values()].filter(snapshot=>linked.get(String(snapshot.vinted_item_id))?.ledger_status!=='SOLD');
+  const missing=previousCapturedAt?items.filter(item=>item.ledger_status==='LISTED-BACKLOG'&&item.vinted_item_id&&!latestIds.has(String(item.vinted_item_id))&&!previousIds.has(String(item.vinted_item_id))):[];
+  return {items,snapshots:live,reviews:reviews||[],source,linked,missing,latestCapturedAt,previousCapturedAt,pendingConfirmation};
 }
 
 export const statusClass=status=>status==='SOLD'?'sold':status==='LISTED-BACKLOG'?'listed':'unlisted';
