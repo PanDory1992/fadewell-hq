@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="pl">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pricing · FADEWELL HQ</title><link rel="stylesheet" href="hq.css">
+<style>
+  .pricing-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:12px}
+  .pricing-card h3{font-size:16px}.pricing-card p{margin:7px 0}
+  .pricing-meta{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:9px;overflow:hidden;margin:12px 0}
+  .pricing-meta div{padding:8px;background:#181a17}.pricing-meta b{display:block;margin-top:2px}
+  .pricing-action{color:var(--cream);font-size:12px;font-weight:800;letter-spacing:.08em}
+  .pricing-action.keep{color:var(--green)}.pricing-action.presentation{color:var(--blue)}.pricing-action.observe{color:var(--muted)}.pricing-action.test_lower{color:#e9c37c}
+  .pricing-note{min-height:43px}.pricing-proof{font-size:12px;color:var(--muted)}
+  @media(max-width:600px){.pricing-meta{grid-template-columns:1fr 1fr}}
+</style>
+<main>
+  <header class="top"><div><div class="eyebrow">FADEWELL HQ · Pricing cockpit</div><h1>Co dziś zrobić z ceną.</h1><p class="muted">Rekomendacje są obserwacją. HQ nigdy nie zmienia ceny automatycznie.</p></div><span class="badge">Prototyp równoległy</span></header>
+  <nav id="nav"></nav>
+  <div class="row-actions"><button id="login">Zaloguj przez GitHub</button><button id="logout" hidden class="secondary">Wyloguj</button><span id="status" class="muted small"></span></div>
+  <section id="app" hidden>
+    <section id="summary" class="grid"></section>
+    <div class="section-title"><div><h2>Kolejka decyzji</h2><p class="muted small">Najpierw największy wpływ i najwyższa pewność. Klik prowadzi do osi prawdy DEN.</p></div><span id="count" class="muted small"></span></div>
+    <div id="rows" class="pricing-grid"></div>
+  </section>
+</main>
+<script type="module">
+import{shell,data,$,safe,money,sb}from'./hq.js';
+import{buildCockpit}from'./pricing.js';
+const actionLabel={KEEP:'Zostaw cenę',OBSERVE:'Obserwuj',TEST_LOWER:'Testuj małą obniżkę',PRESENTATION:'Popraw prezentację'};
+const actionClass=value=>({KEEP:'keep',OBSERVE:'observe',TEST_LOWER:'test_lower',PRESENTATION:'presentation'}[value]||'observe');
+const num=value=>Number(value)||0;
+function card(row){
+  const{item,model,signal,decision,range}=row;
+  const confidence=model.status==='READY'?({HIGH:'wysoka',MEDIUM:'średnia',LOW:'niska'}[model.confidence]):'brak';
+  const estimate=range?`${money(range.low)} – ${money(range.high)}`:'Brak estymaty';
+  const likes=signal.likesDelta===null?'brak 7d':`${signal.likesDelta>=0?'+':''}${signal.likesDelta} likes / 7d`;
+  const views=signal.viewsDelta===null?'brak 7d':`${signal.viewsDelta>=0?'+':''}${signal.viewsDelta} views / 7d`;
+  const price=signal.price||num(item.live_list_price);
+  return`<article class="card pricing-card"><div class="row-actions"><span class="pricing-action ${actionClass(decision.action)}">${safe(actionLabel[decision.action])}</span><span class="muted small">${safe(item.item_id)}</span></div><h3>${safe(item.name||'Bez nazwy')}</h3><div class="pricing-meta"><div><span class="muted small">Cena teraz</span><b>${money(price)}</b></div><div><span class="muted small">Estymata close</span><b>${safe(estimate)}</b></div><div><span class="muted small">Kapitał / break-even</span><b>${money(decision.floor)}</b></div><div><span class="muted small">Dni live</span><b>${safe(signal.daysLive??'—')}</b></div><div><span class="muted small">Popyt</span><b>${safe(likes)}</b></div><div><span class="muted small">Ruch</span><b>${safe(views)}</b></div></div><p class="pricing-note">${safe(decision.reason)}</p>${decision.nextPrice?`<p><b>Następny test:</b> ${money(decision.nextPrice)}</p>`:''}<p class="pricing-proof">Pewność: ${safe(confidence)} · ${safe(model.reason||'brak porównań')}</p><p class="row-actions"><a class="button secondary" href="ledger.html?item=${encodeURIComponent(item.item_id)}">Oś prawdy</a>${item.listing_url?`<a class="button secondary" target="_blank" rel="noreferrer" href="${safe(item.listing_url)}">Vinted</a>`:''}</p></article>`;
+}
+if(await shell('pricing.html')){
+  app.hidden=false;
+  try{
+    const d=await data();
+    const history=await sb.from('hq_listing_snapshots').select('vinted_item_id,captured_at,price_pln,favourites,views,visible').like('source','github_actions_vinted%').order('captured_at',{ascending:true}).limit(5000);
+    if(history.error)throw history.error;
+    const cockpit=buildCockpit(d.items,history.data||[]);
+    const ready=cockpit.rows.filter(row=>row.model.status==='READY').length;
+    const actions=cockpit.rows.filter(row=>row.decision.action==='TEST_LOWER'||row.decision.action==='PRESENTATION').length;
+    summary.innerHTML=[['Aktywne oferty',cockpit.rows.length],['Z estymatą',ready],['Ruchy do rozważenia',actions],['Kalibracja',cockpit.calibration.status==='CALIBRATED'?`gotowa (${cockpit.calibration.count})`:`zbiera dane (${cockpit.calibration.count})`]].map(([label,value])=>`<article class="card metric"><div class="n">${safe(value)}</div><div class="label">${safe(label)}</div></article>`).join('');
+    count.textContent=`${cockpit.rows.length} aktywnych listingów`;
+    rows.innerHTML=cockpit.rows.map(card).join('')||'<article class="card empty">Brak aktywnych ofert powiązanych z DEN.</article>';
+  }catch(error){app.innerHTML=`<div class="notice">Nie udało się wczytać Pricing: ${safe(error.message||error)}</div>`;}
+}
+</script>
+</html>
