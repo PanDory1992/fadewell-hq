@@ -13,12 +13,13 @@ const daysBetween=(from,to=new Date())=>{const date=new Date(from);return Number
 const recencyWeight=item=>{const days=daysBetween(item.sold_on);return days===null?.55:.55+.45*Math.exp(-days/365);};
 const sameSize=(a,b)=>a!==null&&b!==null?Math.max(0,1-Math.abs(a-b)/8):0;
 
-export function feature(item){return{brand:brand(item.name),model:model(item.name),size:size(item.name),words:words(item.name)};}
+export function feature(item){const facts=item.item_dna?.facts||{};return{brand:normalise(facts.brand)||brand(item.name),model:String(facts.model||model(item.name)||''),size:size(facts.tagged_size)||size(item.name),fit:normalise(facts.fit),origin:normalise(facts.origin),condition:normalise(facts.condition),words:words(item.name)};}
 export function comparable(target,candidate){
   const a=feature(target),b=feature(candidate);
   if(!a.brand||a.brand!==b.brand)return null;
   let score=3,reasons=['marka'];
   if(a.model&&a.model===b.model){score+=6;reasons.unshift(`model ${a.model}`);}
+  ['fit','origin','condition'].forEach(key=>{if(a[key]&&a[key]===b[key]){score+=1;reasons.push(key);}});
   const sizeScore=sameSize(a.size,b.size);
   if(sizeScore>=.75){score+=2;reasons.push('rozmiar');}
   const shared=[...a.words].filter(word=>b.words.has(word));
