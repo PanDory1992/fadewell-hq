@@ -2,8 +2,20 @@ const url = Deno.env.get('SUPABASE_URL')!;
 const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const headers = { apikey: key, authorization: `Bearer ${key}`, 'content-type': 'application/json' };
 const norm = (v: string | null | undefined) => (v || '').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, ' ').trim();
-const text = (part: any): string => part?.mimeType === 'text/plain' && part.body?.data ? new TextDecoder().decode(Uint8Array.from(atob(part.body.data.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0))) : (part?.parts || []).map(text).join('\n');
-const money = (body: string, label: string) => { const m=body.match(new RegExp(`${label}\\s*\\n?\\s*(?:zł|zÅ‚|PLN)\\s*([0-9.,]+)`,'i')); const n=Number((m?.[1]||'').replace(',','.')); return Number.isFinite(n)&&n>0?n:null; };
+const decode = (value: string) => new TextDecoder().decode(Uint8Array.from(atob(value.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0)));
+const stripHtml = (value: string) => value
+  .replace(/<br\s*\/?\s*>/gi, '\n').replace(/<\/(?:p|div|tr|td|th|h[1-6])\s*>/gi, '\n')
+  .replace(/<[^>]*>/g, ' ').replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&')
+  .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)));
+const text = (part: any): string => {
+  const own = part?.body?.data && /^text\/(plain|html)$/i.test(part?.mimeType || '')
+    ? (part.mimeType.toLowerCase() === 'text/html' ? stripHtml(decode(part.body.data)) : decode(part.body.data)) : '';
+  return [own, ...(part?.parts || []).map(text)].filter(Boolean).join('\n');
+};
+const lines = (body: string) => body.replace(/\r/g, '').split('\n').map((line) => line.replace(/\s+/g, ' ').trim()).filter(Boolean);
+const afterLabel = (body: string, label: string) => { const all = lines(body); const at = all.findIndex((line) => norm(line) === norm(label)); return at >= 0 ? all[at + 1] || '' : ''; };
+const money = (body: string, label: string) => { const value = afterLabel(body, label); const m = value.match(/([0-9]+[.,][0-9]+)/); const n = Number((m?.[1] || '').replace(',', '.')); return Number.isFinite(n) && n > 0 ? n : null; };
+const transactionId = (body: string) => body.match(/Transaction ID\s*:?\s*#?(\d+)/i)?.[1] || afterLabel(body, 'Transaction ID').match(/\d+/)?.[0] || null;
 async function rest(path: string, init: RequestInit = {}) { return fetch(`${url}/rest/v1/${path}`, { ...init, headers: { ...headers, ...(init.headers || {}) } }); }
 Deno.serve(async () => {
   const connection=await (await rest('hq_email_connections?provider=eq.gmail&select=refresh_token')).json(); if(!connection?.[0]) return Response.json({error:'Gmail is not connected.'},{status:409});
@@ -15,9 +27,9 @@ Deno.serve(async () => {
   for(const ref of listing.messages||[]) {
     const message=await (await gmail(`messages/${ref.id}?format=full`)).json(); const h=(name:string)=>message.payload.headers.find((x:any)=>x.name?.toLowerCase()===name)?.value||''; const subject=h('subject'), from=h('from'), body=text(message.payload); const trusted=/(?:^|<)no-reply@vinted\.pl>?\s*$/i.test(from.trim());
     let event_type='UNCLASSIFIED',item_title='',amount:number|null=null,transaction:string|null=null;
-    if(trusted&&/^Your receipt for/i.test(subject)){event_type='PURCHASE_CONFIRMED';item_title=body.match(/Order\s*\n+([^\n]+)/i)?.[1]?.trim()||'';amount=money(body,'Paid');transaction=body.match(/Transaction ID\s*\n?\s*(\d+)/i)?.[1]||null;}
-    else if(trusted&&/^You.ve sold an item on Vinted/i.test(subject)){event_type='SALE_PENDING';const m=body.match(/has bought\s*\n+([^\n]+)\s*\n+\s*(?:zł|zÅ‚|PLN)\s*([0-9.,]+)/i);item_title=m?.[1]?.trim()||'';amount=m?Number(m[2].replace(',','.')):null;}
-    else if(trusted&&/^This order is completed/i.test(subject)){event_type='SALE_CONFIRMED';item_title=body.match(/Your sale of (.*?) was completed successfully/i)?.[1]?.trim()||'';amount=money(body,'Transferred to your Vinted Balance');transaction=body.match(/Transaction ID:\s*#?(\d+)/i)?.[1]||null;}
+    if(trusted&&/^Your receipt for/i.test(subject)){event_type='PURCHASE_CONFIRMED';item_title=afterLabel(body,'Order');amount=money(body,'Paid');transaction=transactionId(body);}
+    else if(trusted&&/^You.ve sold an item on Vinted/i.test(subject)){event_type='SALE_PENDING';const m=body.match(/has bought\s*\n+([^\n]+)\s*\n+\s*[^\d\n]*([0-9]+[.,][0-9]+)/i);item_title=m?.[1]?.trim()||'';amount=m?Number(m[2].replace(',','.')):null;}
+    else if(trusted&&/^This order is completed/i.test(subject)){event_type='SALE_CONFIRMED';item_title=body.match(/Your sale of (.*?) was completed successfully/i)?.[1]?.trim()||'';amount=money(body,'Transferred to your Vinted Balance');transaction=transactionId(body);}
     const matches=ledger.filter((i:any)=>i.ledger_status!=='SOLD'&&[i.live_title,i.name].some((v:string)=>norm(v)&&norm(v)===norm(item_title))); const item=matches.length===1?matches[0]:null; const auto=(event_type==='PURCHASE_CONFIRMED'&&!!item_title&&amount!==null)||(event_type==='SALE_PENDING'&&!!item&&amount!==null);
     const event={source_event_id:ref.id,event_type,state:auto?'AUTO_APPLIED':'NEEDS_REVIEW',occurred_on:new Date(Number(message.internalDate)).toISOString().slice(0,10),item_title:item_title||null,amount,vinted_transaction_id:transaction,matched_item_id:item?.item_id||null,evidence:{subject,from,gmail_message_id:ref.id}};
     const response=await rest('rpc/apply_hq_gmail_intake',{method:'POST',body:JSON.stringify({p:event})}); if(!response.ok) throw new Error(`Gmail event ${ref.id} was not recorded: ${await response.text()}`); const outcome=await response.json(); if(!outcome.duplicate){received++;if(outcome.state==='AUTO_APPLIED')applied++;else review++;}
