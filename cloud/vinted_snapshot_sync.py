@@ -1,7 +1,7 @@
 """Cloud-safe Vinted wardrobe snapshot -> Supabase. Read-only against Vinted."""
 from __future__ import annotations
 
-import json, os, time
+import html, json, os, re, time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -69,6 +69,14 @@ def eligible_unlisted_items():
     response.raise_for_status()
     return response.json()
 
+def fetch_new_listing_description(vinted_id):
+    """Read public item-page metadata only for a just-discovered listing."""
+    session = cloudscraper.create_scraper()
+    response = session.get(f"https://www.vinted.pl/items/{vinted_id}", headers={**HEADERS, "Accept":"text/html,application/xhtml+xml"}, timeout=30)
+    response.raise_for_status()
+    match = re.search(r'<meta name="description" content="([^"]*)"', response.text, re.I)
+    return html.unescape(match.group(1)) if match else ""
+
 def auto_link(match, listing):
     item = match["item"]; vinted_id = str(listing["id"]); external_key = f"auto-resolver-link-{vinted_id}"
     payload = {"action_type":"LISTED", "item_id":item["item_id"], "occurred_on":datetime.now(timezone.utc).date().isoformat(), "amount":amount(listing.get("price")), "vinted_item_id":vinted_id, "listing_url":f"https://www.vinted.pl/items/{vinted_id}", "live_title":listing.get("title"), "note":f"SYSTEM auto-resolver: score {match['score']}; {'; '.join(match['reasons'])}", "external_key":external_key}
@@ -92,8 +100,10 @@ def main():
     response = requests.post(f"{SUPABASE_URL}/rest/v1/hq_listing_snapshots?on_conflict=vinted_item_id,captured_at", headers={"apikey": SERVICE_KEY, "Authorization": f"Bearer {SERVICE_KEY}", "Content-Type": "application/json", "Prefer": "resolution=merge-duplicates,return=minimal"}, json=rows, timeout=60)
     response.raise_for_status(); print(f"Uploaded {len(rows)} DEN-scope Vinted snapshots at {captured_at}")
     candidates = eligible_unlisted_items()
-    for listing in live_items:
-        if str(listing["id"]) in seen_before: continue
+    new_listings = [listing for listing in live_items if str(listing["id"]) not in seen_before]
+    for listing in new_listings[:5]:
+        listing["description"] = fetch_new_listing_description(listing["id"])
+    for listing in new_listings:
         match = best_match(listing, candidates)
         if match and match["auto"]:
             auto_link(match, listing)
