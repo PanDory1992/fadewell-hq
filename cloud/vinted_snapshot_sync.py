@@ -71,18 +71,24 @@ def eligible_unlisted_items():
 
 def fetch_new_listing_description(vinted_id):
     """Read public item-page metadata only for a just-discovered listing."""
-    session = cloudscraper.create_scraper()
-    response = session.get(f"https://www.vinted.pl/items/{vinted_id}", headers={**HEADERS, "Accept":"text/html,application/xhtml+xml"}, timeout=30)
-    response.raise_for_status()
-    match = re.search(r'<meta name="description" content="([^"]*)"', response.text, re.I)
-    return html.unescape(match.group(1)) if match else ""
+    # The catalog snapshot is still useful when an individual item page is
+    # blocked or temporarily unavailable. A missing description must therefore
+    # lower matching evidence, never discard the whole observation cycle.
+    try:
+        session = cloudscraper.create_scraper()
+        response = session.get(f"https://www.vinted.pl/items/{vinted_id}", headers={**HEADERS, "Accept":"text/html,application/xhtml+xml"}, timeout=30)
+        response.raise_for_status()
+        match = re.search(r'<meta name="description" content="([^"]*)"', response.text, re.I)
+        return html.unescape(match.group(1)) if match else ""
+    except requests.RequestException as error:
+        print(f"Description unavailable for {vinted_id}; leaving it for manual review: {error}")
+        return ""
 
 def auto_link(match, listing):
     item = match["item"]; vinted_id = str(listing["id"]); external_key = f"auto-resolver-link-{vinted_id}"
-    payload = {"action_type":"LISTED", "item_id":item["item_id"], "occurred_on":datetime.now(timezone.utc).date().isoformat(), "amount":amount(listing.get("price")), "vinted_item_id":vinted_id, "listing_url":f"https://www.vinted.pl/items/{vinted_id}", "live_title":listing.get("title"), "note":f"SYSTEM auto-resolver: score {match['score']}; {'; '.join(match['reasons'])}", "external_key":external_key}
+    payload = {"action_type":"LISTED", "item_id":item["item_id"], "occurred_on":datetime.now(timezone.utc).date().isoformat(), "amount":amount(listing.get("price")), "vinted_item_id":vinted_id, "listing_url":f"https://www.vinted.pl/items/{vinted_id}", "live_title":listing.get("title"), "note":f"SYSTEM auto-resolver: score {match['score']}; {'; '.join(match['reasons'])}", "source":"SYSTEM", "external_key":external_key}
     response = requests.post(f"{SUPABASE_URL}/rest/v1/rpc/apply_hq_ledger_action", headers={"apikey": SERVICE_KEY, "Authorization": f"Bearer {SERVICE_KEY}", "Content-Type":"application/json"}, json=payload, timeout=60)
     response.raise_for_status()
-    requests.patch(f"{SUPABASE_URL}/rest/v1/hq_ledger_events", headers={"apikey": SERVICE_KEY, "Authorization": f"Bearer {SERVICE_KEY}", "Content-Type":"application/json"}, params={"external_key":f"eq.{external_key}"}, json={"source":"SYSTEM"}, timeout=60).raise_for_status()
     print(f"Auto-linked {vinted_id} -> {item['item_id']} ({match['score']}: {', '.join(match['reasons'])})")
 
 def main():
@@ -101,8 +107,11 @@ def main():
     response.raise_for_status(); print(f"Uploaded {len(rows)} DEN-scope Vinted snapshots at {captured_at}")
     candidates = eligible_unlisted_items()
     new_listings = [listing for listing in live_items if str(listing["id"]) not in seen_before]
-    for listing in new_listings[:5]:
+    description_limit = 5
+    for listing in new_listings[:description_limit]:
         listing["description"] = fetch_new_listing_description(listing["id"])
+    if len(new_listings) > description_limit:
+        print(f"{len(new_listings) - description_limit} new listings were not page-read this cycle; title-only matching remains manual-review only.")
     for listing in new_listings:
         match = best_match(listing, candidates)
         if match and match["auto"]:

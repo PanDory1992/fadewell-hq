@@ -2,6 +2,7 @@ import {createClient} from 'https://esm.sh/@supabase/supabase-js@2';
 
 export const sb=createClient('https://qgjkxtolyhbwpvncwtkn.supabase.co','sb_publishable_4I4sJO02Tudp00ALX2xbaQ_DHptnBLb');
 export const $=id=>document.getElementById(id);
+export const dateTime=value=>value?new Intl.DateTimeFormat('pl-PL',{dateStyle:'medium',timeStyle:'short'}).format(new Date(value)): '—';
 export const safe=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 export const money=value=>value===null||value===undefined||value===''?'—':new Intl.NumberFormat('pl-PL',{style:'currency',currency:'PLN',maximumFractionDigits:0}).format(Number(value));
 export const date=value=>value?new Intl.DateTimeFormat('pl-PL',{dateStyle:'medium'}).format(new Date(value)): '—';
@@ -29,11 +30,12 @@ export async function shell(active){
 }
 
 export async function data(){
-  const [{data:ledgerItems,error:ledgerError},{data:legacyItems,error:legacyError},{data:snapshots,error:snapshotsError},{data:reviews,error:reviewsError}]=await Promise.all([
+  const [{data:ledgerItems,error:ledgerError},{data:legacyItems,error:legacyError},{data:snapshots,error:snapshotsError},{data:reviews,error:reviewsError},{data:events,error:eventsError}]=await Promise.all([
     sb.from('hq_ledger_items').select('*').order('item_id'),
     sb.from('hq_items').select('*').order('item_id'),
     sb.from('hq_listing_snapshots').select('*').order('captured_at',{ascending:false}).limit(800),
-    sb.from('hq_review_queue').select('*').eq('state','OPEN').order('created_at',{ascending:false})
+    sb.from('hq_review_queue').select('*').eq('state','OPEN').order('created_at',{ascending:false}),
+    sb.from('hq_ledger_events').select('item_id,event_type,occurred_on,amount,detail,source,created_at,external_key').order('created_at',{ascending:false}).limit(30)
   ]);
   if(snapshotsError||reviewsError) throw (snapshotsError||reviewsError);
   if(ledgerError&&legacyError) throw ledgerError;
@@ -72,7 +74,7 @@ export async function data(){
   });
   const live=[...liveById.values()].filter(snapshot=>linked.get(String(snapshot.vinted_item_id))?.ledger_status!=='SOLD');
   const missing=previousCapturedAt?items.filter(item=>item.ledger_status==='LISTED-BACKLOG'&&item.vinted_item_id&&!latestIds.has(String(item.vinted_item_id))&&!previousIds.has(String(item.vinted_item_id))):[];
-  return {items,snapshots:live,reviews:reviews||[],source,linked,missing,latestCapturedAt,previousCapturedAt,pendingConfirmation};
+  return {items,snapshots:live,reviews:reviews||[],events:events||[],eventsError,source,linked,missing,latestCapturedAt,previousCapturedAt,pendingConfirmation};
 }
 
 export const statusClass=status=>status==='SOLD'?'sold':status==='LISTED-BACKLOG'?'listed':'unlisted';

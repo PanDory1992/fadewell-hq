@@ -32,3 +32,14 @@ sync job to write the private operational copy protected by RLS.
 - Vinted images are referenced by URL and are never downloaded or stored.
 - A disappearing listing becomes `MISSING`, then requires review as sold, relist,
   hidden/removed, or unknown.
+- The planned audit migration will make Ledger history append-only; until it is
+  reviewed and applied, treat the export verifier as backup integrity evidence,
+  not proof that remote event rows cannot be changed.
+
+## Backup and export
+
+Run `python fadewell_hq\backup_canonical.py` to create an atomic, checksummed
+JSON bundle under `fadewell_hq\backups\`. It contains canonical items, the
+full Ledger event history, and intake-event state. Verify any copied bundle
+offline with `python fadewell_hq\canonical_export.py --verify <bundle-path>`.
+Backups are private local artifacts and do not change Google Sheet or Vinted.
