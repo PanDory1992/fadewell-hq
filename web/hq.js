@@ -8,10 +8,12 @@ export const safe=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;
 export const money=value=>value===null||value===undefined||value===''?'—':new Intl.NumberFormat('pl-PL',{style:'currency',currency:'PLN',maximumFractionDigits:0}).format(Number(value));
 export const date=value=>value?new Intl.DateTimeFormat('pl-PL',{dateStyle:'medium'}).format(new Date(value)): '—';
 export const pendingExternalReviews=events=>(events||[]).filter(event=>event.state==='NEEDS_REVIEW');
+export const toast=message=>{const el=document.createElement('div');el.className='toast';el.textContent=message;document.body.append(el);setTimeout(()=>el.remove(),2600)};
 
 const pages=[['index.html','Dziś · Home'],['operations.html','Dziś · Operations'],['kpi.html','Pieniądze · KPI'],['finance.html','Pieniądze · Finanse'],['pricing.html','Pieniądze · Pricing'],['ledger.html','Stock · Ledger'],['wardrobe.html','Stock · Live wardrobe'],['item-dna.html','Stock · Item DNA'],['sourcing.html','Stock · Sourcing'],['actions.html','Akcje · Action Studio'],['system.html','System']];
 
 export async function shell(active){
+  if(!document.querySelector('link[href="polish.css"]'))document.head.insertAdjacentHTML('beforeend','<link rel="stylesheet" href="polish.css">');
   $('nav').innerHTML=pages.map(([href,label])=>`<a class="${href===active?'active':''}" href="${href}">${label}</a>`).join('')+`<button class="secondary" id="globalSearch" title="Ctrl+K">⌕</button>`;
   document.addEventListener('keydown',event=>{if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='k'){event.preventDefault();location.href='ledger.html?focus=search';}});
   $('globalSearch').onclick=()=>location.href='ledger.html?focus=search';
