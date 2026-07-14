@@ -10,7 +10,7 @@ export const date=value=>value?new Intl.DateTimeFormat('pl-PL',{dateStyle:'mediu
 export const pendingExternalReviews=events=>(events||[]).filter(event=>event.state==='NEEDS_REVIEW');
 export const toast=message=>{const el=document.createElement('div');el.className='toast';el.textContent=message;document.body.append(el);setTimeout(()=>el.remove(),2600)};
 
-const pages=[['index.html','Dziś · Home'],['operations.html','Dziś · Operations'],['kpi.html','Pieniądze · KPI'],['finance.html','Pieniądze · Finanse'],['pricing.html','Pieniądze · Pricing'],['ledger.html','Stock · Ledger'],['wardrobe.html','Stock · Live wardrobe'],['item-dna.html','Stock · Item DNA'],['sourcing.html','Stock · Sourcing'],['actions.html','Akcje · Action Studio'],['system.html','System']];
+const pages=[['index.html','Dziś · Home'],['operations.html','Dziś · Operations'],['kpi.html','Pieniądze · KPI'],['finance.html','Pieniądze · Finanse'],['pricing.html','Pieniądze · Pricing'],['ledger.html','Stock · Ledger'],['wardrobe.html','Stock · Live wardrobe'],['triage.html','Stock · Triage'],['item-dna.html','Stock · Item DNA'],['sourcing.html','Stock · Sourcing'],['actions.html','Akcje · Action Studio'],['system.html','System']];
 
 export async function shell(active){
   if(!document.querySelector('link[href="polish.css"]'))document.head.insertAdjacentHTML('beforeend','<link rel="stylesheet" href="polish.css">');
