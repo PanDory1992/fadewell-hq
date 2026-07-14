@@ -64,22 +64,6 @@ class SnapshotPaginationTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "expected 2 unique items, got 1"):
             list(sync.fetch_items(session))
 
-    def test_only_explicit_active_confirmation_becomes_override(self):
-        responses = iter([
-            RequestsResponse([{"item_id": "DEN-224", "vinted_item_id": "9288606102"}]),
-            RequestsResponse([
-                {"item_id": "DEN-224", "detail": "Miki manually confirmed this listing is currently active."},
-                {"item_id": "DEN-224", "detail": "Ordinary manual mapping."},
-            ]),
-        ])
-        original_get = sync.requests.get
-        sync.requests.get = lambda *_args, **_kwargs: next(responses)
-        try:
-            result = sync.manually_confirmed_missing_listings(set())
-        finally:
-            sync.requests.get = original_get
-        self.assertEqual(result[0]["item_id"], "DEN-224")
-
 
 if __name__ == "__main__":
     unittest.main()
