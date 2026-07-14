@@ -8,7 +8,7 @@
   <section id="app" hidden><div class="toolbar"><input id="query" placeholder="Szukaj ID lub tytułu…"><select id="sort"><option value="newest">Najnowsze</option><option value="oldest">Najstarsze</option><option value="likes">Najwięcej likes</option><option value="price_desc">Najwyższa cena</option><option value="price_asc">Najniższa cena</option><option value="title">Tytuł A–Z</option></select></div><p id="count" class="muted small"></p><div id="items" class="live-grid"></div></section>
 </main>
 <script type="module">
-import {shell,data,$,safe,money} from './hq.js';
+import {shell,data,$,safe,money} from'./hq.js?v=20260714b';
 let listings=[],linked=new Map(),pending=new Set();
 const numeric=value=>Number(value)||0;
 function compare(sort,a,b){
