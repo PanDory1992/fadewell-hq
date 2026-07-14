@@ -93,36 +93,6 @@ def eligible_unlisted_items():
     response.raise_for_status()
     return response.json()
 
-def manually_confirmed_missing_listings(catalog_ids):
-    """Keep an explicit human confirmation visible when Vinted's catalog omits it.
-
-    This is intentionally limited to items still marked LISTED whose Vinted ID
-    is absent from the current catalog response and which have an explicit
-    manual active-confirmation audit event. It never invents a sale or silently
-    creates a new mapping.
-    """
-    headers = {"apikey": SERVICE_KEY, "Authorization": f"Bearer {SERVICE_KEY}"}
-    items_response = requests.get(
-        f"{SUPABASE_URL}/rest/v1/hq_ledger_items", headers=headers,
-        params={"select":"item_id,vinted_item_id,listing_url,live_title,live_list_price", "ledger_status":"eq.LISTED-BACKLOG", "vinted_item_id":"not.is.null", "limit":"1000"}, timeout=60,
-    )
-    items_response.raise_for_status()
-    missing = [item for item in items_response.json() if str(item["vinted_item_id"]) not in catalog_ids]
-    if not missing:
-        return []
-    item_ids = ",".join(item["item_id"] for item in missing)
-    events_response = requests.get(
-        f"{SUPABASE_URL}/rest/v1/hq_ledger_events", headers=headers,
-        params={"select":"item_id,detail", "item_id":f"in.({item_ids})", "event_type":"eq.LISTED", "source":"eq.MANUAL", "limit":"1000"}, timeout=60,
-    )
-    events_response.raise_for_status()
-    manually_confirmed = {
-        row["item_id"] for row in events_response.json()
-        if "manually confirmed this listing is currently active" in str(row.get("detail") or "").lower()
-        or str(row.get("detail") or "").startswith("ACTIVE_CONFIRMATION:")
-    }
-    return [item for item in missing if item["item_id"] in manually_confirmed]
-
 def fetch_new_listing_description(vinted_id):
     """Read public item-page metadata only for a just-discovered listing."""
     # The catalog snapshot is still useful when an individual item page is
@@ -156,12 +126,6 @@ def main():
     reference_count = recent_reference_scope_count()
     if reference_count is not None and len(rows) < reference_count - 1:
         raise RuntimeError(f"Refusing partial Vinted snapshot: {len(rows)} DEN items against recent reference {reference_count}; expected at most one removal between runs")
-    catalog_ids = {str(item["id"]) for item in live_items}
-    overrides = manually_confirmed_missing_listings(catalog_ids)
-    for item in overrides:
-        rows.append({"vinted_item_id": str(item["vinted_item_id"]), "captured_at": captured_at, "title": item.get("live_title") or item["item_id"], "price_pln": amount(item.get("live_list_price")), "views": 0, "favourites": 0, "visible": True, "photo_url": None, "condition_label": None, "source": "github_actions_vinted_manual_override"})
-    if overrides:
-        print(f"Kept {len(overrides)} manually confirmed active listing(s) visible after catalog omission: {', '.join(item['item_id'] for item in overrides)}")
     seen_before = prior_snapshot_ids([str(item["id"]) for item in live_items])
     response = requests.post(f"{SUPABASE_URL}/rest/v1/hq_listing_snapshots?on_conflict=vinted_item_id,captured_at", headers={"apikey": SERVICE_KEY, "Authorization": f"Bearer {SERVICE_KEY}", "Content-Type": "application/json", "Prefer": "resolution=merge-duplicates,return=minimal"}, json=rows, timeout=60)
     response.raise_for_status(); print(f"Uploaded {len(rows)} DEN-scope Vinted snapshots at {captured_at}")
