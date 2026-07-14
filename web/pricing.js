@@ -1,3 +1,4 @@
+import {itemTitle} from './item-title.js';
 const number=value=>Number(value)||0;
 const sale=item=>item.sale_price_arbitrage??item.sale_price_recycled??null;
 const closePrice=item=>{const value=sale(item);return value===null||value===undefined||value===''?null:number(value);};
@@ -13,7 +14,7 @@ const daysBetween=(from,to=new Date())=>{const date=new Date(from);return Number
 const recencyWeight=item=>{const days=daysBetween(item.sold_on);return days===null?.55:.55+.45*Math.exp(-days/365);};
 const sameSize=(a,b)=>a!==null&&b!==null?Math.max(0,1-Math.abs(a-b)/8):0;
 
-export function feature(item){const facts=item.item_dna?.facts||{};return{brand:brand(facts.brand)||brand(item.name),model:String(facts.model||model(item.name)||''),size:size(facts.tagged_size)||size(item.name),fit:normalise(facts.fit),origin:normalise(facts.origin),wash:normalise(facts.wash),era:normalise(facts.era),condition:normalise(facts.condition),words:words(item.name)};}
+export function feature(item){const facts=item.item_dna?.facts||{},title=itemTitle(item);return{brand:brand(facts.brand)||brand(title),model:String(facts.model||model(title)||''),size:size(facts.tagged_size)||size(title),fit:normalise(facts.fit),origin:normalise(facts.origin),wash:normalise(facts.wash),era:normalise(facts.era),condition:normalise(facts.condition),words:words(title)};}
 export function comparable(target,candidate){
   const a=feature(target),b=feature(candidate);
   if(!a.brand||a.brand!==b.brand)return null;

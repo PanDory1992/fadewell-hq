@@ -1,3 +1,4 @@
+import {itemTitle} from './item-title.js';
 const n=value=>Number(value)||0;
 const sale=item=>item.sale_price_arbitrage??item.sale_price_recycled??null;
 const normalise=value=>String(value||'').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g,' ').trim();
@@ -10,7 +11,7 @@ const quantile=(values,p)=>{const sorted=[...values].filter(Number.isFinite).sor
 const days=(from,to=new Date())=>{const a=new Date(from),b=new Date(to);return Number.isNaN(a.getTime())||Number.isNaN(b.getTime())?null:Math.max(0,Math.floor((b-a)/86400000));};
 const sizeBand=value=>value===null?'bez rozmiaru':value<=31?'W28–31':value<=34?'W32–34':'W35+';
 const mode=values=>{const counts=new Map;for(const value of values.filter(Boolean))counts.set(value,(counts.get(value)||0)+1);return [...counts.entries()].sort((a,b)=>b[1]-a[1])[0]?.[0]||'';};
-const fact=item=>{const f=item.item_dna?.facts||{};return{brand:brand(f.brand)||brand(item.name),model:String(f.model||model(item.name)||''),size:waist(f.tagged_size)||waist(item.name),fit:f.fit||'',origin:f.origin||'',era:f.era||''};};
+const fact=item=>{const f=item.item_dna?.facts||{},title=itemTitle(item);return{brand:brand(f.brand)||brand(title),model:String(f.model||model(title)||''),size:waist(f.tagged_size)||waist(title),fit:f.fit||'',origin:f.origin||'',era:f.era||''};};
 const labelFor=(f,items)=>{const base=[f.brand||'Nieokreślona marka',f.model||'bez modelu',f.band].filter(Boolean).join(' · ');const facts=items.map(fact),suffix=['fit','origin','era'].map(key=>{const value=mode(facts.map(row=>row[key]));return value&&facts.filter(row=>row[key]===value).length/items.length>=.6?value:'';}).filter(Boolean);return suffix.length?`${base} · ${suffix.join(' · ')}`:base;};
 const ageCount=(items,limit)=>items.filter(item=>days(item.purchased_on)>limit).length;
 
