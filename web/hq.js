@@ -23,7 +23,7 @@ export async function shell(active){
   const {data:owner,error}=await sb.rpc('claim_first_hq_owner');
   if(error||!owner){$('status').textContent=error?.message||'To konto nie ma dostępu ownera.';return false;}
   $('login').hidden=true;$('logout').hidden=false;$('status').textContent=session.user.email||'HQ owner';
-  if(active!=='actions.html'){
+  if(!['actions.html','operations.html','item-dna.html'].includes(active)){
     let lastRefresh=Date.now();
     window.setInterval(()=>{lastRefresh=Date.now();location.reload();},60000);
     document.addEventListener('visibilitychange',()=>{if(!document.hidden&&Date.now()-lastRefresh>10000){lastRefresh=Date.now();location.reload();}});
@@ -86,4 +86,4 @@ export async function data(){
 
 export const statusClass=status=>status==='SOLD'?'sold':status==='LISTED-BACKLOG'?'listed':'unlisted';
 export const statusLabel=status=>status==='LISTED-BACKLOG'?'Wystawione':status==='UNLISTED-BACKLOG'?'Do wystawienia':status==='SOLD'?'Sprzedane':status||'—';
-export function itemPhoto(item,snapshots){const snapshot=snapshots?.find(row=>String(row.vinted_item_id)===String(item.vinted_item_id));return snapshot?.photo_url||'';}
+export function itemPhoto(item,snapshots){const snapshot=snapshots?.find(row=>String(row.vinted_item_id)===String(item.vinted_item_id));return snapshot?.photo_url||item.last_photo_url||'';}
