@@ -25,6 +25,14 @@ def amount(value):
     try: return float(str(value).replace(",", "."))
     except (TypeError, ValueError): return None
 
+def condition_label(item):
+    """Preserve Vinted's displayed condition verbatim when catalog supplies it."""
+    value = item.get("status") or item.get("condition")
+    if isinstance(value, dict):
+        value = value.get("title") or value.get("name") or value.get("label")
+    value = str(value or "").strip()
+    return value or None
+
 def fetch_items(session=None):
     session = session or cloudscraper.create_scraper()
     session.get("https://www.vinted.pl", headers=HEADERS, timeout=30)
@@ -144,14 +152,14 @@ def main():
         if item_id in excluded: continue
         live_items.append(item)
         photo = item.get("photo") or {}; high = photo.get("high_resolution") or {}
-        rows.append({"vinted_item_id": item_id, "captured_at": captured_at, "title": item.get("title"), "price_pln": amount(item.get("price")), "views": item.get("view_count") or 0, "favourites": item.get("favourite_count") or 0, "visible": bool(item.get("is_visible", True)), "photo_url": high.get("url") or photo.get("url"), "source": "github_actions_vinted"})
+        rows.append({"vinted_item_id": item_id, "captured_at": captured_at, "title": item.get("title"), "price_pln": amount(item.get("price")), "views": item.get("view_count") or 0, "favourites": item.get("favourite_count") or 0, "visible": bool(item.get("is_visible", True)), "photo_url": high.get("url") or photo.get("url"), "condition_label": condition_label(item), "source": "github_actions_vinted"})
     reference_count = recent_reference_scope_count()
     if reference_count is not None and len(rows) < reference_count - 1:
         raise RuntimeError(f"Refusing partial Vinted snapshot: {len(rows)} DEN items against recent reference {reference_count}; expected at most one removal between runs")
     catalog_ids = {str(item["id"]) for item in live_items}
     overrides = manually_confirmed_missing_listings(catalog_ids)
     for item in overrides:
-        rows.append({"vinted_item_id": str(item["vinted_item_id"]), "captured_at": captured_at, "title": item.get("live_title") or item["item_id"], "price_pln": amount(item.get("live_list_price")), "views": 0, "favourites": 0, "visible": True, "photo_url": None, "source": "github_actions_vinted_manual_override"})
+        rows.append({"vinted_item_id": str(item["vinted_item_id"]), "captured_at": captured_at, "title": item.get("live_title") or item["item_id"], "price_pln": amount(item.get("live_list_price")), "views": 0, "favourites": 0, "visible": True, "photo_url": None, "condition_label": None, "source": "github_actions_vinted_manual_override"})
     if overrides:
         print(f"Kept {len(overrides)} manually confirmed active listing(s) visible after catalog omission: {', '.join(item['item_id'] for item in overrides)}")
     seen_before = prior_snapshot_ids([str(item["id"]) for item in live_items])

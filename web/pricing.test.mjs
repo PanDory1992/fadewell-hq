@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {buildCockpit,estimate,recommendation} from './pricing.js';
+import {buildCockpit,comparable,estimate,recommendation} from './pricing.js';
 const sold=[
  {item_id:'DEN-001',name:'Levis 501 W32',ledger_status:'SOLD',sale_price_arbitrage:150,sold_on:'2026-05-01'},
  {item_id:'DEN-002',name:'Levis 501 W33',ledger_status:'SOLD',sale_price_arbitrage:160,sold_on:'2026-05-10'},
@@ -11,4 +11,7 @@ const sold=[
  {item_id:'DEN-008',name:'Levis 501 W33',ledger_status:'SOLD',sale_price_arbitrage:162,sold_on:'2026-07-01'}
 ];
 const live={item_id:'DEN-200',name:'Levis 501 W32',ledger_status:'LISTED-BACKLOG',vinted_item_id:'1',live_list_price:190,total_capital:40,listed_on:'2026-06-01'};
+const dnaA={item_id:'DEN-201',name:'unhelpful import name',item_dna:{facts:{brand:"Levi's",model:'521',tagged_size:'W32 L32',wash:'mid blue',condition:'Very good'}}};
+const dnaB={item_id:'DEN-202',name:'another imported name',item_dna:{facts:{brand:'Levis',model:'521',tagged_size:'W32 L32',wash:'mid blue',condition:'Very good'}}};
+const dnaMatch=comparable(dnaA,dnaB);assert.ok(dnaMatch&&dnaMatch.reasons.includes('model 521'));assert.ok(dnaMatch.reasons.includes('wash'));assert.ok(dnaMatch.reasons.includes('condition'));
 const model=estimate(live,sold);assert.equal(model.status,'READY');assert.ok(model.center>=150&&model.center<=165);const cockpit=buildCockpit([...sold,live],[{vinted_item_id:'1',captured_at:'2026-06-01T10:00:00Z',price_pln:190,favourites:0,views:10},{vinted_item_id:'1',captured_at:'2026-07-13T10:00:00Z',price_pln:190,favourites:0,views:30}]);assert.equal(cockpit.rows[0].decision.action,'TEST_LOWER');assert.ok(cockpit.rows[0].decision.nextPrice>=live.total_capital);const stale=recommendation(live,model,{latest:{captured_at:'2026-06-01'},snapshotAge:4,price:190},{});assert.equal(stale.action,'OBSERVE');const protectedFloor=recommendation({...live,total_capital:188},model,{latest:{captured_at:'2026-07-12'},snapshotAge:0,price:190,daysLive:30,likesDelta:0},{});assert.equal(protectedFloor.action,'PRESENTATION');console.log('Pricing cockpit tests passed');
