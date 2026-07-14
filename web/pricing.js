@@ -49,9 +49,10 @@ export function listingHistory(item,snapshots){return snapshots.filter(row=>Stri
 export function listingSignal(item,snapshots){
   const rows=listingHistory(item,snapshots),latest=rows.at(-1),first=rows[0];
   const weekAgo=latest?new Date(new Date(latest.captured_at).getTime()-7*86400000):null;
-  const baseline=[...rows].reverse().find(row=>weekAgo&&new Date(row.captured_at)<=weekAgo)||first;
+  const baseline=[...rows].reverse().find(row=>weekAgo&&new Date(row.captured_at)<=weekAgo);
   const priceChanges=rows.filter((row,index)=>index&&number(row.price_pln)!==number(rows[index-1].price_pln));
-  return{rows,latest,first,likesDelta:latest&&baseline?number(latest.favourites)-number(baseline.favourites):null,viewsDelta:latest&&baseline?number(latest.views)-number(baseline.views):null,priceChanges,daysLive:daysBetween(item.listed_on),snapshotAge:latest?daysBetween(latest.captured_at):null,price:number(latest?.price_pln??item.live_list_price),startPrice:number(first?.price_pln??item.live_list_price)};
+  const historyDays=latest&&first?daysBetween(first.captured_at,new Date(latest.captured_at)):null;
+  return{rows,latest,first,historyDays,likes:latest?number(latest.favourites):null,likesDelta:latest&&baseline?number(latest.favourites)-number(baseline.favourites):null,viewsDelta:null,priceChanges,daysLive:daysBetween(item.listed_on),snapshotAge:latest?daysBetween(latest.captured_at):null,price:number(latest?.price_pln??item.live_list_price),startPrice:number(first?.price_pln??item.live_list_price)};
 }
 const roundToFive=value=>Math.round(value/5)*5;
 export function recommendation(item,model,signal,calibration){
@@ -60,14 +61,14 @@ export function recommendation(item,model,signal,calibration){
   if(signal.snapshotAge===null||signal.snapshotAge>3)return{action:'OBSERVE',priority:15,reason:'Snapshot live ma ponad 3 dni; najpierw poczekaj na świeży odczyt collectora.',floor};
   if(model.status!=='READY')return{action:'OBSERVE',priority:20,reason:'Brak wystarczających własnych porównań — bez rady cenowej.',floor};
   const low=Math.max(floor,model.low-(calibration.band||0)),high=model.high+(calibration.band||0),days=signal.daysLive??0;
-  if((signal.likesDelta??0)>=2)return{action:'KEEP',priority:75,reason:`Likes rosną (${signal.likesDelta>=0?'+':''}${signal.likesDelta} / 7 dni) — nie obniżaj jeszcze.`,floor,low,high};
+  if(signal.historyDays>=7&&signal.likesDelta>=2)return{action:'KEEP',priority:75,reason:`Likes rosną (${signal.likesDelta>=0?'+':''}${signal.likesDelta} / ${signal.historyDays} dni) — nie obniżaj jeszcze.`,floor,low,high};
   if(days<14)return{action:'OBSERVE',priority:35,reason:`Oferta live ${days} dni; za wcześnie na wniosek cenowy bez negatywnego sygnału.`,floor,low,high};
-  if((signal.likesDelta??0)<=0&&price>high){
+  if(price>high&&days>=21){
     const drop=Math.min(10,Math.max(5,roundToFive((price-model.center)/2))),next=price-drop;
     if(next<=floor)return{action:'PRESENTATION',priority:90,reason:'Cena jest wysoko, ale bezpieczna obniżka dotknęłaby kapitału. Najpierw popraw zdjęcie główne lub tytuł.',floor,low,high};
-    return{action:'TEST_LOWER',priority:95,reason:`Brak nowych likes i cena ponad zakresem estymaty. Testuj najmniejszy ruch: −${drop} zł.`,floor,low,high,nextPrice:next};
+    return{action:'TEST_LOWER',priority:95,reason:`Oferta live ${days} dni · ${signal.likes??0} likes · cena ${price} zł powyżej zakresu ${low}–${high} zł. Testuj najmniejszy ruch: −${drop} zł.`,floor,low,high,nextPrice:next};
   }
-  if(days>=21&&(signal.likesDelta??0)<=0)return{action:'PRESENTATION',priority:80,reason:'Brak świeżego popytu po 21 dniach; najpierw sprawdź zdjęcie główne, tytuł i wymiary.',floor,low,high};
+  if(days>=21&&signal.likes===0)return{action:'PRESENTATION',priority:80,reason:'0 likes po 21 dniach; najpierw sprawdź zdjęcie główne, tytuł i wymiary.',floor,low,high};
   return{action:'KEEP',priority:55,reason:'Cena mieści się w estymowanym zakresie; obserwuj kolejny tydzień.',floor,low,high};
 }
 export function buildCockpit(items,snapshots){
