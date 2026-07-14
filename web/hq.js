@@ -7,7 +7,7 @@ export const safe=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;
 export const money=value=>value===null||value===undefined||value===''?'—':new Intl.NumberFormat('pl-PL',{style:'currency',currency:'PLN',maximumFractionDigits:0}).format(Number(value));
 export const date=value=>value?new Intl.DateTimeFormat('pl-PL',{dateStyle:'medium'}).format(new Date(value)): '—';
 
-const pages=[['index.html','Home'],['kpi.html','KPI'],['ledger.html','Ledger'],['item-dna.html','Item DNA'],['pricing.html','Pricing'],['finance.html','Finanse'],['wardrobe.html','Live wardrobe'],['operations.html','Operations'],['actions.html','Action Studio'],['system.html','System']];
+const pages=[['index.html','Home'],['kpi.html','KPI'],['ledger.html','Ledger'],['item-dna.html','Item DNA'],['pricing.html','Pricing'],['finance.html','Finanse'],['sourcing.html','Sourcing'],['wardrobe.html','Live wardrobe'],['operations.html','Operations'],['actions.html','Action Studio'],['system.html','System']];
 
 export async function shell(active){
   $('nav').innerHTML=pages.map(([href,label])=>`<a class="${href===active?'active':''}" href="${href}">${label}</a>`).join('');
