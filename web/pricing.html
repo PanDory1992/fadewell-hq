@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="pl">
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Pricing Â· FADEWELL HQ</title><link rel="stylesheet" href="hq.css">
+<title>Pricing · FADEWELL HQ</title><link rel="stylesheet" href="hq.css">
 <style>
   .pricing-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:12px}
   .pricing-card h3{font-size:16px}.pricing-card p{margin:7px 0}
@@ -13,28 +13,28 @@
   @media(max-width:600px){.pricing-meta{grid-template-columns:1fr 1fr}}
 </style>
 <main>
-  <header class="top"><div><div class="eyebrow">FADEWELL HQ Â· Pricing cockpit</div><h1>Co dziÅ› zrobiÄ‡ z cenÄ….</h1><p class="muted">Rekomendacje sÄ… obserwacjÄ…. HQ nigdy nie zmienia ceny automatycznie.</p></div><span class="badge">Advisory</span></header>
+  <header class="top"><div><div class="eyebrow">FADEWELL HQ · Pricing cockpit</div><h1>Co dziś zrobić z ceną.</h1><p class="muted">Rekomendacje są obserwacją. HQ nigdy nie zmienia ceny automatycznie.</p></div><span class="badge">Advisory</span></header>
   <nav id="nav"></nav>
   <div class="row-actions"><button id="login">Zaloguj przez GitHub</button><button id="logout" hidden class="secondary">Wyloguj</button><span id="status" class="muted small"></span></div>
   <section id="app" hidden>
     <section id="summary" class="grid"></section>
-    <div class="section-title"><div><h2>Kolejka decyzji</h2><p class="muted small">Najpierw najwiÄ™kszy wpÅ‚yw i najwyÅ¼sza pewnoÅ›Ä‡. Klik prowadzi do osi prawdy DEN.</p></div><span id="count" class="muted small"></span></div>
+    <div class="section-title"><div><h2>Kolejka decyzji</h2><p class="muted small">Najpierw największy wpływ i najwyższa pewność. Klik prowadzi do osi prawdy DEN.</p></div><span id="count" class="muted small"></span></div>
     <div id="rows" class="pricing-grid"></div>
   </section>
 </main>
 <script type="module">
 import{shell,data,$,safe,money,sb,itemTitle}from'./hq.js';
 import{buildCockpit}from'./pricing.js';
-const actionLabel={KEEP:'Zostaw cenÄ™',OBSERVE:'Obserwuj',TEST_LOWER:'Testuj maÅ‚Ä… obniÅ¼kÄ™',RAISE:'PodnieÅ› cenÄ™',PRESENTATION:'Popraw prezentacjÄ™'};
+const actionLabel={KEEP:'Zostaw cenę',OBSERVE:'Obserwuj',TEST_LOWER:'Testuj małą obniżkę',RAISE:'Podnieś cenę',PRESENTATION:'Popraw prezentację'};
 const actionClass=value=>({KEEP:'keep',OBSERVE:'observe',TEST_LOWER:'test_lower',RAISE:'raise',PRESENTATION:'presentation'}[value]||'observe');
 const num=value=>Number(value)||0;
 function card(row){
   const{item,model,signal,decision,range}=row;
-  const confidence=model.status==='READY'?({HIGH:'wysoka',MEDIUM:'Å›rednia',LOW:'niska'}[model.confidence]):'brak';
-  const estimate=range?`${money(range.low)} â€“ ${money(range.high)}`:'Brak estymaty';
-  const likes=`${signal.likes??0} likes${signal.likesDelta===null?'':` Â· ${signal.likesDelta>=0?'+':''}${signal.likesDelta} / ${signal.historyDays} dni`}`;
-  const price=signal.price||num(item.live_list_price),lastChange=signal.priceChanges.at(-1),previous=lastChange?signal.rows[signal.rows.indexOf(lastChange)-1]:null,changeText=lastChange&&previous?`Ostatnia zmiana ceny: ${Math.max(0,Math.floor((Date.now()-new Date(lastChange.captured_at))/86400000))} dni temu, ${num(lastChange.price_pln)-num(previous.price_pln)>=0?'+':''}${num(lastChange.price_pln)-num(previous.price_pln)} zÅ‚.`:'';
-  return`<article class="card pricing-card"><div class="row-actions"><span class="pricing-action ${actionClass(decision.action)}">${safe(actionLabel[decision.action])}</span><span class="muted small">${safe(item.item_id)}</span></div><h3>${safe(itemTitle(item))}</h3><div class="pricing-meta"><div><span class="muted small">Cena teraz</span><b>${money(price)}</b></div><div><span class="muted small">Estymata close</span><b>${safe(estimate)}</b></div><div><span class="muted small">KapitaÅ‚ / break-even</span><b>${money(decision.floor)}</b></div><div><span class="muted small">Dni live</span><b>${safe(signal.daysLive??'â€”')}</b></div><div><span class="muted small">Likes</span><b>${safe(likes)}</b></div></div><p class="pricing-note">${safe(decision.reason)}</p>${changeText?`<p class="muted small">${safe(changeText)}</p>`:''}${decision.nextPrice?`<p><b>${decision.action==='RAISE'?'Proponowana cena':'NastÄ™pny test'}:</b> ${money(decision.nextPrice)}</p><button class="secondary" data-price-test="${safe(item.item_id)}" data-price="${safe(decision.nextPrice)}">Zapisz test ceny</button>`:''}<p class="pricing-proof">PewnoÅ›Ä‡: ${safe(confidence)} Â· ${safe(model.reason||'brak porÃ³wnaÅ„')}</p><p class="row-actions"><a class="button secondary" href="ledger.html?item=${encodeURIComponent(item.item_id)}">OÅ› prawdy</a>${item.listing_url?`<a class="button secondary" target="_blank" rel="noreferrer" href="${safe(item.listing_url)}">Vinted</a>`:''}</p></article>`;
+  const confidence=model.status==='READY'?({HIGH:'wysoka',MEDIUM:'średnia',LOW:'niska'}[model.confidence]):'brak';
+  const estimate=range?`${money(range.low)} – ${money(range.high)}`:'Brak estymaty';
+  const likes=`${signal.likes??0} likes${signal.likesDelta===null?'':` · ${signal.likesDelta>=0?'+':''}${signal.likesDelta} / ${signal.historyDays} dni`}`;
+  const price=signal.price||num(item.live_list_price),lastChange=signal.priceChanges.at(-1),previous=lastChange?signal.rows[signal.rows.indexOf(lastChange)-1]:null,changeText=lastChange&&previous?`Ostatnia zmiana ceny: ${Math.max(0,Math.floor((Date.now()-new Date(lastChange.captured_at))/86400000))} dni temu, ${num(lastChange.price_pln)-num(previous.price_pln)>=0?'+':''}${num(lastChange.price_pln)-num(previous.price_pln)} zł.`:'';
+  return`<article class="card pricing-card"><div class="row-actions"><span class="pricing-action ${actionClass(decision.action)}">${safe(actionLabel[decision.action])}</span><span class="muted small">${safe(item.item_id)}</span></div><h3>${safe(itemTitle(item))}</h3><div class="pricing-meta"><div><span class="muted small">Cena teraz</span><b>${money(price)}</b></div><div><span class="muted small">Estymata close</span><b>${safe(estimate)}</b></div><div><span class="muted small">Kapitał / break-even</span><b>${money(decision.floor)}</b></div><div><span class="muted small">Dni live</span><b>${safe(signal.daysLive??'—')}</b></div><div><span class="muted small">Likes</span><b>${safe(likes)}</b></div></div><p class="pricing-note">${safe(decision.reason)}</p>${changeText?`<p class="muted small">${safe(changeText)}</p>`:''}${decision.nextPrice?`<p><b>${decision.action==='RAISE'?'Proponowana cena':'Następny test'}:</b> ${money(decision.nextPrice)}</p><button class="secondary" data-price-test="${safe(item.item_id)}" data-price="${safe(decision.nextPrice)}">Zapisz test ceny</button>`:''}<p class="pricing-proof">Pewność: ${safe(confidence)} · ${safe(model.reason||'brak porównań')}</p><p class="row-actions"><a class="button secondary" href="ledger.html?item=${encodeURIComponent(item.item_id)}">Oś prawdy</a>${item.listing_url?`<a class="button secondary" target="_blank" rel="noreferrer" href="${safe(item.listing_url)}">Vinted</a>`:''}</p></article>`;
 }
 if(await shell('pricing.html')){
   app.hidden=false;
@@ -45,10 +45,10 @@ if(await shell('pricing.html')){
     const cockpit=buildCockpit(d.items,history.data||[]);
     const ready=cockpit.rows.filter(row=>row.model.status==='READY').length;
     const actions=cockpit.rows.filter(row=>['TEST_LOWER','RAISE','PRESENTATION'].includes(row.decision.action)).length;
-    summary.innerHTML=[['Aktywne oferty',cockpit.rows.length],['Z estymatÄ…',ready],['Ruchy do rozwaÅ¼enia',actions],['Kalibracja',cockpit.calibration.status==='CALIBRATED'?`gotowa (${cockpit.calibration.count})`:`zbiera dane (${cockpit.calibration.count})`]].map(([label,value])=>`<article class="card metric"><div class="n">${safe(value)}</div><div class="label">${safe(label)}</div></article>`).join('');
-    count.textContent=`${cockpit.rows.length} aktywnych listingÃ³w`;
-    rows.innerHTML=cockpit.rows.map(card).join('')||'<article class="card empty">Brak aktywnych ofert powiÄ…zanych z DEN.</article>';rows.querySelectorAll('button[data-price-test]').forEach(button=>button.onclick=async()=>{button.disabled=true;const{error}=await sb.rpc('record_hq_price_test_owner',{p:{item_id:button.dataset.priceTest,price:button.dataset.price,external_key:crypto.randomUUID()}});if(error){button.disabled=false;button.textContent='Nie zapisano';return}button.textContent='Test zapisany'});
-  }catch(error){app.innerHTML=`<div class="notice">Nie udaÅ‚o siÄ™ wczytaÄ‡ Pricing: ${safe(error.message||error)}</div>`;}
+    summary.innerHTML=[['Aktywne oferty',cockpit.rows.length],['Z estymatą',ready],['Ruchy do rozważenia',actions],['Kalibracja',cockpit.calibration.status==='CALIBRATED'?`gotowa (${cockpit.calibration.count})`:`zbiera dane (${cockpit.calibration.count})`]].map(([label,value])=>`<article class="card metric"><div class="n">${safe(value)}</div><div class="label">${safe(label)}</div></article>`).join('');
+    count.textContent=`${cockpit.rows.length} aktywnych listingów`;
+    rows.innerHTML=cockpit.rows.map(card).join('')||'<article class="card empty">Brak aktywnych ofert powiązanych z DEN.</article>';rows.querySelectorAll('button[data-price-test]').forEach(button=>button.onclick=async()=>{button.disabled=true;const{error}=await sb.rpc('record_hq_price_test_owner',{p:{item_id:button.dataset.priceTest,price:button.dataset.price,external_key:crypto.randomUUID()}});if(error){button.disabled=false;button.textContent='Nie zapisano';return}button.textContent='Test zapisany'});
+  }catch(error){app.innerHTML=`<div class="notice">Nie udało się wczytać Pricing: ${safe(error.message||error)}</div>`;}
 }
 </script>
 </html>

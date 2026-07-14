@@ -34,10 +34,10 @@ export function estimate(target,sold,options={}){
   const comps=eligible.map(item=>({item,match:comparable(target,item)})).filter(row=>row.match&&row.match.score>=5).map(row=>({price:closePrice(row.item),weight:row.match.weight,item:row.item,match:row.match}));
   const direct=comps.filter(row=>row.match.reasons.includes(`model ${feature(target).model}`));
   const evidence=direct.length>=2?direct:comps;
-  if(evidence.length<3)return{status:'INSUFFICIENT',comparables:evidence,reason:'Za maÅ‚o wÅ‚asnych, porÃ³wnywalnych sprzedaÅ¼y.'};
+  if(evidence.length<3)return{status:'INSUFFICIENT',comparables:evidence,reason:'Za mało własnych, porównywalnych sprzedaży.'};
   const center=weightedQuantile(evidence,.5),low=weightedQuantile(evidence,.25),high=weightedQuantile(evidence,.75),directCount=direct.length;
   const confidence=directCount>=5?'HIGH':evidence.length>=5?'MEDIUM':'LOW';
-  return{status:'READY',center,low:Math.min(low,center),high:Math.max(high,center),confidence,comparables:evidence,directCount,reason:`${evidence.length} wÅ‚asnych sprzedaÅ¼y Â· ${directCount} z tym samym modelem.`};
+  return{status:'READY',center,low:Math.min(low,center),high:Math.max(high,center),confidence,comparables:evidence,directCount,reason:`${evidence.length} własnych sprzedaży · ${directCount} z tym samym modelem.`};
 }
 export function calibrate(sold){
   const ordered=[...sold].filter(item=>closePrice(item)!==null&&item.sold_on).sort((a,b)=>String(a.sold_on).localeCompare(String(b.sold_on)));
@@ -55,26 +55,27 @@ export function listingSignal(item,snapshots){
   return{rows,latest,first,historyDays,likes:latest?number(latest.favourites):null,likesDelta:latest&&baseline?number(latest.favourites)-number(baseline.favourites):null,viewsDelta:null,priceChanges,daysLive:daysBetween(item.listed_on),snapshotAge:latest?daysBetween(latest.captured_at):null,price:number(latest?.price_pln??item.live_list_price),startPrice:number(first?.price_pln??item.live_list_price)};
 }
 const roundToFive=value=>Math.round(value/5)*5;
+const priceText=value=>`${new Intl.NumberFormat('pl-PL',{maximumFractionDigits:0}).format(number(value))} zł`;
 export function recommendation(item,model,signal,calibration){
   const floor=number(item.total_capital),price=signal.price;
   if(!signal.latest)return{action:'OBSERVE',priority:10,reason:'Brak aktualnego snapshotu live.',floor};
-  if(signal.snapshotAge===null||signal.snapshotAge>3)return{action:'OBSERVE',priority:15,reason:'Snapshot live ma ponad 3 dni; najpierw poczekaj na Å›wieÅ¼y odczyt collectora.',floor};
-  if(model.status!=='READY')return{action:'OBSERVE',priority:20,reason:'Brak wystarczajÄ…cych wÅ‚asnych porÃ³wnaÅ„ â€” bez rady cenowej.',floor};
+  if(signal.snapshotAge===null||signal.snapshotAge>3)return{action:'OBSERVE',priority:15,reason:'Snapshot live ma ponad 3 dni; najpierw poczekaj na świeży odczyt collectora.',floor};
+  if(model.status!=='READY')return{action:'OBSERVE',priority:20,reason:'Brak wystarczających własnych porównań — bez rady cenowej.',floor};
   const low=Math.max(floor,model.low-(calibration.band||0)),high=model.high+(calibration.band||0),days=signal.daysLive??0;
   if(price<low){
     const next=roundToFive(model.center);
-    return{action:'RAISE',priority:85,reason:`Cena ${price} zÅ‚ jest poniÅ¼ej estymowanego zakresu ${low}â€“${high} zÅ‚. PodnieÅ› jÄ… w stronÄ™ Å›rodka modelu: ${next} zÅ‚.`,floor,low,high,nextPrice:next};
+    return{action:'RAISE',priority:85,reason:`Cena ${priceText(price)} jest poniżej estymowanego zakresu ${priceText(low)}–${priceText(high)}. Podnieś ją w stronę środka modelu: ${priceText(next)}.`,floor,low,high,nextPrice:next};
   }
-  if(price>high&&days<21)return{action:'OBSERVE',priority:40,reason:`Cena ${price} zÅ‚ jest powyÅ¼ej estymowanego zakresu ${low}â€“${high} zÅ‚, ale oferta live jest dopiero ${days} dni. Jeszcze nie obniÅ¼aj; obserwuj sygnaÅ‚y do 21. dnia.`,floor,low,high};
-  if(signal.historyDays>=7&&signal.likesDelta>=2)return{action:'KEEP',priority:75,reason:`Likes rosnÄ… (${signal.likesDelta>=0?'+':''}${signal.likesDelta} / ${signal.historyDays} dni) â€” nie obniÅ¼aj jeszcze.`,floor,low,high};
-  if(days<14)return{action:'OBSERVE',priority:35,reason:`Oferta live ${days} dni; za wczeÅ›nie na wniosek cenowy bez negatywnego sygnaÅ‚u.`,floor,low,high};
+  if(price>high&&days<21)return{action:'OBSERVE',priority:40,reason:`Cena ${priceText(price)} jest powyżej estymowanego zakresu ${priceText(low)}–${priceText(high)}, ale oferta live jest dopiero ${days} dni. Jeszcze nie obniżaj; obserwuj sygnały do 21. dnia.`,floor,low,high};
+  if(signal.historyDays>=7&&signal.likesDelta>=2)return{action:'KEEP',priority:75,reason:`Likes rosną (${signal.likesDelta>=0?'+':''}${signal.likesDelta} / ${signal.historyDays} dni) — nie obniżaj jeszcze.`,floor,low,high};
+  if(days<14)return{action:'OBSERVE',priority:35,reason:`Oferta live ${days} dni; za wcześnie na wniosek cenowy bez negatywnego sygnału.`,floor,low,high};
   if(price>high){
     const drop=Math.min(10,Math.max(5,roundToFive((price-model.center)/2))),next=price-drop;
-    if(next<=floor)return{action:'PRESENTATION',priority:90,reason:'Cena jest wysoko, ale bezpieczna obniÅ¼ka dotknÄ™Å‚aby kapitaÅ‚u. Najpierw popraw zdjÄ™cie gÅ‚Ã³wne lub tytuÅ‚.',floor,low,high};
-    return{action:'TEST_LOWER',priority:95,reason:`Oferta live ${days} dni Â· ${signal.likes??0} likes Â· cena ${price} zÅ‚ powyÅ¼ej zakresu ${low}â€“${high} zÅ‚. Testuj najmniejszy ruch: âˆ’${drop} zÅ‚.`,floor,low,high,nextPrice:next};
+    if(next<=floor)return{action:'PRESENTATION',priority:90,reason:'Cena jest wysoko, ale bezpieczna obniżka dotknęłaby kapitału. Najpierw popraw zdjęcie główne lub tytuł.',floor,low,high};
+    return{action:'TEST_LOWER',priority:95,reason:`Oferta live ${days} dni · ${signal.likes??0} likes · cena ${priceText(price)} powyżej zakresu ${priceText(low)}–${priceText(high)}. Testuj najmniejszy ruch do ${priceText(next)} (−${priceText(drop)}).`,floor,low,high,nextPrice:next};
   }
-  if(days>=21&&signal.likes===0)return{action:'PRESENTATION',priority:80,reason:'0 likes po 21 dniach; najpierw sprawdÅº zdjÄ™cie gÅ‚Ã³wne, tytuÅ‚ i wymiary.',floor,low,high};
-  return{action:'KEEP',priority:55,reason:'Cena mieÅ›ci siÄ™ w estymowanym zakresie; obserwuj kolejny tydzieÅ„.',floor,low,high};
+  if(days>=21&&signal.likes===0)return{action:'PRESENTATION',priority:80,reason:'0 likes po 21 dniach; najpierw sprawdź zdjęcie główne, tytuł i wymiary.',floor,low,high};
+  return{action:'KEEP',priority:55,reason:'Cena mieści się w estymowanym zakresie; obserwuj kolejny tydzień.',floor,low,high};
 }
 export function buildCockpit(items,snapshots){
   const sold=items.filter(item=>item.ledger_status==='SOLD'&&closePrice(item)!==null),live=items.filter(item=>item.ledger_status==='LISTED-BACKLOG'&&item.vinted_item_id),calibration=calibrate(sold);
