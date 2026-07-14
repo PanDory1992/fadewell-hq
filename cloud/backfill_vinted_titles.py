@@ -32,19 +32,32 @@ def apply(item,title):
     response.raise_for_status()
     return response.json()
 
+def fetch_title(session,vinted_id):
+    """Respect Vinted throttling; a 429 is a pause, never a reason to guess."""
+    for attempt in range(4):
+        response=session.get(f"https://www.vinted.pl/items/{vinted_id}",headers=VINTED_HEADERS,timeout=30)
+        if response.status_code==429:
+            wait=30*(attempt+1)
+            print(f"Vinted rate limit for {vinted_id}; waiting {wait}s before retry.")
+            time.sleep(wait)
+            continue
+        if response.status_code==404: return None
+        response.raise_for_status()
+        return title_from_html(response.text)
+    return None
+
 def main():
     session=cloudscraper.create_scraper(); rows=candidates(); updated=unavailable=0
     for index,item in enumerate(rows,1):
         vinted_id=str(item["vinted_item_id"])
         try:
-            response=session.get(f"https://www.vinted.pl/items/{vinted_id}",headers=VINTED_HEADERS,timeout=30)
-            response.raise_for_status(); title=title_from_html(response.text)
+            title=fetch_title(session,vinted_id)
             if not title: unavailable+=1; print(f"No trustworthy title for {item['item_id']} / {vinted_id}"); continue
             result=apply(item,title)
             if result.get("updated"): updated+=1; print(f"{item['item_id']} <- {title}")
         except requests.RequestException as error:
             unavailable+=1; print(f"Unavailable {item['item_id']} / {vinted_id}: {error}")
-        if index<len(rows): time.sleep(.7)
+        if index<len(rows): time.sleep(2)
     print(f"Historical title backfill complete: candidates={len(rows)} updated={updated} unavailable={unavailable}")
 
 if __name__=="__main__": main()
