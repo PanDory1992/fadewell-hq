@@ -17,6 +17,8 @@ export async function shell(active){
   $('nav').innerHTML=pages.map(([href,label])=>`<a class="${href===active?'active':''}" href="${href}">${label}</a>`).join('')+`<button class="secondary" id="globalSearch" title="Ctrl+K">⌕</button>`;
   document.addEventListener('keydown',event=>{if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='k'){event.preventDefault();location.href='ledger.html?focus=search';}});
   $('globalSearch').onclick=()=>location.href='ledger.html?focus=search';
+  if(active==='index.html')setTimeout(()=>{const notice=document.querySelector('#kpis .notice'),target=$('openCases');if(notice&&target)target.append(notice)},200);
+  if(active==='actions.html')setTimeout(()=>{const wrap=$('itemWrap'),select=$('item');if(!wrap||!select||wrap.querySelector('input[data-item-filter]'))return;const input=document.createElement('input');input.dataset.itemFilter='';input.placeholder='Szukaj DEN lub tytułu…';input.setAttribute('aria-label','Szukaj itemu');wrap.insertBefore(input,select);const options=[...select.options].map(option=>({value:option.value,text:option.text}));input.oninput=()=>{const q=input.value.toLowerCase(),previous=select.value;select.innerHTML=options.filter(option=>!q||option.text.toLowerCase().includes(q)).map(option=>`<option value="${option.value}">${option.text}</option>`).join('');select.value=previous;select.dispatchEvent(new Event('change'))}},200);
   $('login').onclick=async()=>{
     const {error}=await sb.auth.signInWithOAuth({provider:'github',options:{redirectTo:location.origin+location.pathname}});
     if(error) $('status').textContent=`Logowanie: ${error.message}`;
