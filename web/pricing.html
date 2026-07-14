@@ -41,7 +41,7 @@ if(await shell('pricing.html')){
   app.hidden=false;
   try{
     const d=await data();
-    const history=await sb.from('hq_listing_snapshots').select('vinted_item_id,captured_at,price_pln,favourites,views,visible').like('source','github_actions_vinted%').order('captured_at',{ascending:true}).limit(5000);
+    const history=await sb.from('hq_listing_snapshots').select('vinted_item_id,captured_at,price_pln,favourites,views,visible').like('source','github_actions_vinted%').order('captured_at',{ascending:false}).limit(5000);
     if(history.error)throw history.error;
     const cockpit=buildCockpit(d.items,history.data||[]);
     const ready=cockpit.rows.filter(row=>row.model.status==='READY').length;
