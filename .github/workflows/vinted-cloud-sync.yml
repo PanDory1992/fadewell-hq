@@ -18,7 +18,13 @@ jobs:
         with:
           python-version: '3.11'
       - run: pip install --disable-pip-version-check cloudscraper requests
-      - run: python cloud/vinted_snapshot_sync.py
+      - name: Fetch a complete Vinted snapshot (retry transient partial pulls)
+        run: |
+          for attempt in 1 2 3; do
+            python cloud/vinted_snapshot_sync.py && exit 0
+            if [ "$attempt" -eq 3 ]; then exit 1; fi
+            sleep $((attempt * 30))
+          done
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
