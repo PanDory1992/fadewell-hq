@@ -43,6 +43,11 @@ def item(item_id):
 
 
 class SnapshotPaginationTests(unittest.TestCase):
+    def test_condition_label_preserves_catalog_label(self):
+        self.assertEqual(sync.condition_label({"status": "Very good"}), "Very good")
+        self.assertEqual(sync.condition_label({"status": {"title": "New with tags"}}), "New with tags")
+        self.assertIsNone(sync.condition_label({}))
+
     def test_fetches_every_advertised_page(self):
         session = Session([
             {},
