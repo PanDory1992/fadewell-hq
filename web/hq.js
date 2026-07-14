@@ -9,10 +9,12 @@ export const money=value=>value===null||value===undefined||value===''?'—':new 
 export const date=value=>value?new Intl.DateTimeFormat('pl-PL',{dateStyle:'medium'}).format(new Date(value)): '—';
 export const pendingExternalReviews=events=>(events||[]).filter(event=>event.state==='NEEDS_REVIEW');
 
-const pages=[['index.html','Home'],['kpi.html','KPI'],['ledger.html','Ledger'],['item-dna.html','Item DNA'],['pricing.html','Pricing'],['finance.html','Finanse'],['sourcing.html','Sourcing'],['wardrobe.html','Live wardrobe'],['operations.html','Operations'],['actions.html','Action Studio'],['system.html','System']];
+const pages=[['index.html','Dziś · Home'],['operations.html','Dziś · Operations'],['kpi.html','Pieniądze · KPI'],['finance.html','Pieniądze · Finanse'],['pricing.html','Pieniądze · Pricing'],['ledger.html','Stock · Ledger'],['wardrobe.html','Stock · Live wardrobe'],['item-dna.html','Stock · Item DNA'],['sourcing.html','Stock · Sourcing'],['actions.html','Akcje · Action Studio'],['system.html','System']];
 
 export async function shell(active){
-  $('nav').innerHTML=pages.map(([href,label])=>`<a class="${href===active?'active':''}" href="${href}">${label}</a>`).join('');
+  $('nav').innerHTML=pages.map(([href,label])=>`<a class="${href===active?'active':''}" href="${href}">${label}</a>`).join('')+`<button class="secondary" id="globalSearch" title="Ctrl+K">⌕</button>`;
+  document.addEventListener('keydown',event=>{if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='k'){event.preventDefault();location.href='ledger.html?focus=search';}});
+  $('globalSearch').onclick=()=>location.href='ledger.html?focus=search';
   $('login').onclick=async()=>{
     const {error}=await sb.auth.signInWithOAuth({provider:'github',options:{redirectTo:location.origin+location.pathname}});
     if(error) $('status').textContent=`Logowanie: ${error.message}`;
