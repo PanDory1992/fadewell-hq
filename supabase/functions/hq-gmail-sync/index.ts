@@ -20,7 +20,7 @@ const transactionId = (body: string) => body.match(/Transaction ID\s*:?\s*#?(\d+
 // Known Vinted non-accounting mail. Recorded as auditable evidence, never queued
 // for a human, never touches the Ledger. An UNKNOWN subject must still fall
 // through to UNCLASSIFIED / NEEDS_REVIEW: fail toward review, not toward silence.
-const NOISE = /(shipping label|etykiet[aÄ™] wysy[Å‚l]kow|new message|nowa wiadomo|added .* to (their )?(favourites|favorites)|dodaÅ‚.* do ulubionych|left you a review|wystawi[aÅ‚].* opini|price drop|obni[Å¼z]ka ceny|newsletter|promo)/i;
+const NOISE = /(shipping label|etykiet[aę] wysy[łl]kow|new message|nowa wiadomo|added .* to (their )?(favourites|favorites)|dodał.* do ulubionych|left you a review|wystawi[ał].* opini|price drop|obni[żz]ka ceny|newsletter|promo)/i;
 async function rest(path: string, init: RequestInit = {}) { return fetch(`${url}/rest/v1/${path}`, { ...init, headers: { ...headers, ...(init.headers || {}) } }); }
 Deno.serve(async () => {
   const connection=await (await rest('hq_email_connections?provider=eq.gmail&select=refresh_token')).json(); if(!connection?.[0]) return Response.json({error:'Gmail is not connected.'},{status:409});
@@ -34,7 +34,7 @@ Deno.serve(async () => {
     let event_type='UNCLASSIFIED',item_title='',amount:number|null=null,transaction:string|null=null,bundleItems:string[]=[];
     if(trusted&&/^Your receipt for/i.test(subject)){
       const bundleMatch=subject.match(/Bundle\s+(\d+)\s+items?/i); bundleItems=betweenLabels(body,'Order','Paid'); amount=money(body,'Paid'); transaction=transactionId(body);
-      if(bundleMatch&&Number(bundleMatch[1])>1){event_type='PURCHASE_BUNDLE';bundleItems=bundleItems.slice(0,Number(bundleMatch[1]));item_title=bundleItems.join(' Â· ');}
+      if(bundleMatch&&Number(bundleMatch[1])>1){event_type='PURCHASE_BUNDLE';bundleItems=bundleItems.slice(0,Number(bundleMatch[1]));item_title=bundleItems.join(' · ');}
       else {event_type='PURCHASE_CONFIRMED';item_title=bundleItems[0]||'';}
     }
     else if(trusted&&/^You.ve sold an item on Vinted/i.test(subject)){event_type='SALE_PENDING';const m=body.match(/has bought\s*\n+([^\n]+)\s*\n+\s*[^\d\n]*([0-9]+[.,][0-9]+)/i);item_title=m?.[1]?.trim()||'';amount=m?Number(m[2].replace(',','.')):null;transaction=transactionId(body);}
