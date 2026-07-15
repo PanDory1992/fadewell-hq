@@ -34,7 +34,7 @@ begin
       bundle_title := nullif(btrim(bundle_items->>i),''); if bundle_title is null then raise exception 'Bundle purchase item title is required'; end if;
       share := (base_grosze + case when i < extra_grosze then 1 else 0 end)::numeric / 100;
       select 'DEN-'||lpad((coalesce(max((substring(item_id from '^DEN-([0-9]+)$'))::integer),0)+1)::text,3,'0') into created_item from hq_ledger_items;
-      ledger_id:=apply_hq_ledger_action(jsonb_build_object('action_type','PURCHASE','item_id',created_item,'occurred_on',event_date,'name',bundle_title,'sourcing_type','Vinted purchase bundle','purchase_cost',share,'delivery_cost',0,'total_capital',share,'note',format('Vinted Gmail bundle receipt %s Â· part %s/%s Â· equal split of paid total',source_id,i+1,bundle_count),'source','VINTED','external_key',format('gmail-%s-bundle-%s',source_id,i+1)));
+      ledger_id:=apply_hq_ledger_action(jsonb_build_object('action_type','PURCHASE','item_id',created_item,'occurred_on',event_date,'name',bundle_title,'sourcing_type','Vinted purchase bundle','purchase_cost',share,'delivery_cost',0,'total_capital',share,'note',format('Vinted Gmail bundle receipt %s · part %s/%s · equal split of paid total',source_id,i+1,bundle_count),'source','VINTED','external_key',format('gmail-%s-bundle-%s',source_id,i+1)));
       if i=0 then item:=created_item; bundle_ledger_id:=ledger_id; end if;
       bundle_ids:=bundle_ids||jsonb_build_array(created_item); bundle_shares:=bundle_shares||jsonb_build_array(share);
     end loop;
