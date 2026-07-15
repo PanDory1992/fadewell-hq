@@ -27,6 +27,16 @@ class ListingResolverTests(unittest.TestCase):
         result = best_match({"title": "Levi's blue jeans", "price_pln": 200}, [item()])
         self.assertFalse(result["auto"])
 
+    def test_slash_size_and_non_conflicting_attributes_break_a_safe_tie(self):
+        listing = {"title": "Levis 501 Redtab Medium Blue W33 L32 Vintage 2000 Made in Poland", "price_pln": 179}
+        candidates = [
+            item("DEN-219", "Levis 501 33/32 Midblue Vintage", 155),
+            item("DEN-225", "Levis 501-0660 33/32 1994 USA Charcoal", 225),
+        ]
+        result = best_match(listing, candidates)
+        self.assertTrue(result["auto"])
+        self.assertEqual(result["item"]["item_id"], "DEN-219")
+
     def test_marker_normalizes_den_identifier(self):
         self.assertEqual(marker("Proof #DEN-00123"), "DEN-123")
 
