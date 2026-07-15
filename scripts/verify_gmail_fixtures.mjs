@@ -3,7 +3,13 @@ import { resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
 const fixtureRoot = resolve(root, 'data/private_gmail_fixtures');
-const manifest = JSON.parse(await readFile(resolve(fixtureRoot, 'manifest.json'), 'utf8'));
+let manifest;
+try {
+  manifest = JSON.parse(await readFile(resolve(fixtureRoot, 'manifest.json'), 'utf8'));
+} catch {
+  console.error('Private Gmail fixture gate cannot run: expected local data/private_gmail_fixtures/manifest.json is unavailable. Do not create synthetic fixtures.');
+  process.exit(1);
+}
 
 const forbidden = manifest.redaction_terms;
 const required = ['purchase_single', 'purchase_bundle', 'sale_pending', 'sale_completed', 'shipping_label_en'];
