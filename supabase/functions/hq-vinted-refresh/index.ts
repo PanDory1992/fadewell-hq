@@ -3,7 +3,7 @@ const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const githubToken = Deno.env.get('GITHUB_WORKFLOW_DISPATCH_TOKEN');
 const cors = {
   'access-control-allow-origin': 'https://hq.fadewell.eu',
-  'access-control-allow-headers': 'authorization, apikey, content-type',
+  'access-control-allow-headers': 'authorization, apikey, content-type, x-client-info',
   'access-control-allow-methods': 'POST, OPTIONS',
   'content-type': 'application/json'
 };
