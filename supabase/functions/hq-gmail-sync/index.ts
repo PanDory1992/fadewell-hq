@@ -17,6 +17,7 @@ const afterLabel = (body: string, label: string) => { const all = lines(body); c
 const betweenLabels = (body: string, start: string, end: string) => { const all = lines(body); const at = all.findIndex((line) => norm(line) === norm(start)); const stop = at < 0 ? -1 : all.slice(at + 1).findIndex((line) => norm(line) === norm(end)); return at < 0 ? [] : all.slice(at + 1, stop < 0 ? undefined : at + 1 + stop).filter(Boolean); };
 const money = (body: string, label: string) => { const value = afterLabel(body, label); const m = value.match(/([0-9]+[.,][0-9]+)/); const n = Number((m?.[1] || '').replace(',', '.')); return Number.isFinite(n) && n > 0 ? n : null; };
 const transactionId = (body: string) => body.match(/Transaction ID\s*:?\s*#?(\d+)/i)?.[1] || afterLabel(body, 'Transaction ID').match(/\d+/)?.[0] || null;
+const completedSaleTitle = (body: string) => body.match(/Your sale of\s+([\s\S]*?)\s+was completed successfully/i)?.[1]?.replace(/\s+/g, ' ').trim() || '';
 // Known Vinted non-accounting mail. Recorded as auditable evidence, never queued
 // for a human, never touches the Ledger. An UNKNOWN subject must still fall
 // through to UNCLASSIFIED / NEEDS_REVIEW: fail toward review, not toward silence.
@@ -38,7 +39,7 @@ Deno.serve(async () => {
       else {event_type='PURCHASE_CONFIRMED';item_title=bundleItems[0]||'';}
     }
     else if(trusted&&/^You.ve sold an item on Vinted/i.test(subject)){event_type='SALE_PENDING';const m=body.match(/has bought\s*\n+([^\n]+)\s*\n+\s*[^\d\n]*([0-9]+[.,][0-9]+)/i);item_title=m?.[1]?.trim()||'';amount=m?Number(m[2].replace(',','.')):null;transaction=transactionId(body);}
-    else if(trusted&&/^This order is completed/i.test(subject)){event_type='SALE_CONFIRMED';item_title=body.match(/Your sale of (.*?) was completed successfully/i)?.[1]?.trim()||'';amount=money(body,'Transferred to your Vinted Balance');transaction=transactionId(body);}
+    else if(trusted&&/^This order is completed/i.test(subject)){event_type='SALE_CONFIRMED';item_title=completedSaleTitle(body);amount=money(body,'Transferred to your Vinted Balance');transaction=transactionId(body);}
     else if(trusted&&NOISE.test(subject)){event_type='NOISE';}
     // A machine may book a sale only against a DEN that is actually LISTED on Vinted.
     // LISTED-BACKLOG, not merely "not SOLD" - an unlisted item can never be auto-sold.
