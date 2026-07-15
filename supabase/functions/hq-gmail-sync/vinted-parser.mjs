@@ -1,4 +1,4 @@
-export const VINTED_PARSER_VERSION = '2026-07-15.template.v2';
+export const VINTED_PARSER_VERSION = '2026-07-15.template.v3';
 
 export const nonEmptyLines = (body) => body.replace(/\r/g, '').split('\n').map((line) => line.replace(/\s+/g, ' ').trim()).filter(Boolean);
 const normalized = (value) => value.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, ' ').trim();
@@ -22,7 +22,9 @@ const completedTitle = (body) => body.match(/Your sale of\s+([\s\S]*?)\s+was com
   || (() => { const all = nonEmptyLines(body); const start = all.findIndex((line) => /^Your sale of\s+/i.test(line)); const stop = start < 0 ? -1 : all.slice(start).findIndex((line) => /was completed successfully/i.test(line)); return start >= 0 && stop >= 0 ? all.slice(start, start + stop + 1).join(' ').replace(/^Your sale of\s+/i, '').replace(/\s+was completed successfully\.?$/i, '').trim() : null; })();
 const pendingSale = (body) => {
   const match = body.match(/has bought\s*\n+([^\n]+)\s*\n+\s*[^\d\n]*([0-9]+[.,][0-9]+)/i);
-  return { title: match?.[1]?.trim() || null, amount: money(match?.[2] || null) };
+  if (match) return { title: match[1].trim(), amount: money(match[2]) };
+  const all = nonEmptyLines(body); const buyerLine = all.findIndex((line) => /has bought$/i.test(line));
+  return { title: buyerLine >= 0 ? all[buyerLine + 1] || null : null, amount: money(all[buyerLine + 2] || null) };
 };
 const NOISE_SUBJECT = /(shipping label|etykiet[aę] wysy[łl]kow|new message|nowa wiadomo|added .* to (their )?(favourites|favorites)|dodał.* do ulubionych|left you a review|wystawi[ał].* opini|price drop|obni[żz]ka ceny|newsletter|promo)/i;
 
@@ -65,8 +67,9 @@ export const parseVintedMail = ({ subject, body }) => {
     });
   }
   if (/shipping label|etykiet[aę] wysy[łl]kow/i.test(subject)) {
-    return result('NOISE', 'shipping_label_en_v1', {
-      transaction_id: transaction, item_title: labelValue(body, 'Item name'), tracking_code: labelValue(body, 'Tracking code'), transaction_date: labelValue(body, 'Shipment deadline')
+    const title = labelValue(body, 'Item name') || subject.replace(/\s+(shipping label|etykiet[aę] wysy[łl]kow).*$/i, '').trim() || null;
+    return result('NOISE', 'shipping_label_subject_v1', {
+      transaction_id: transaction, item_title: title, tracking_code: labelValue(body, 'Tracking code'), transaction_date: labelValue(body, 'Shipment deadline')
     });
   }
   if (/^Confirm your order/i.test(subject)) {
