@@ -48,8 +48,9 @@ Deno.serve(async () => {
     const event_type=parsed.event_type,item_title=parsed.item_title,amount=parsed.amount,transaction=parsed.transaction_id,bundleItems=parsed.bundle_items;
     // A machine may book a sale only against a DEN that is actually LISTED on Vinted.
     // LISTED-BACKLOG, not merely "not SOLD" - an unlisted item can never be auto-sold.
-    const matches=ledger.filter((i:any)=>i.ledger_status==='LISTED-BACKLOG'&&[i.live_title,i.name].some((v:string)=>norm(v)&&norm(v)===norm(item_title))); const item=matches.length===1?matches[0]:null; const auto=(event_type==='PURCHASE_CONFIRMED'&&!!item_title&&amount!==null)||(event_type==='PURCHASE_BUNDLE'&&bundleItems.length>1&&amount!==null)||(event_type==='SALE_PENDING'&&!!item&&amount!==null&&amount>0)||event_type==='SALE_CONFIRMED';
-    const eventState=event_type==='NOISE'?'AUTO_DISMISSED':auto?'AUTO_APPLIED':'NEEDS_REVIEW';
+    const matches=ledger.filter((i:any)=>i.ledger_status==='LISTED-BACKLOG'&&[i.live_title,i.name].some((v:string)=>norm(v)&&norm(v)===norm(item_title))); const item=matches.length===1?matches[0]:null; const isShippingLabel=parsed.template_id==='shipping_label_subject_v1';
+    const auto=(event_type==='PURCHASE_CONFIRMED'&&!!item_title&&amount!==null)||(event_type==='PURCHASE_BUNDLE'&&bundleItems.length>1&&amount!==null)||(event_type==='SALE_PENDING'&&!!item&&amount!==null&&amount>0)||event_type==='SALE_CONFIRMED';
+    const eventState=(event_type==='NOISE'||isShippingLabel)?'AUTO_DISMISSED':auto?'AUTO_APPLIED':'NEEDS_REVIEW';
     const normalizedBody=safeNormalizedText(body);
     const extractedFields={...parsed.fields,template_id:{value:parsed.template_id,status:'CONFIRMED'},gmail_thread_id:{value:message.threadId,status:'CONFIRMED'},received_at:{value:receivedAt,status:'CONFIRMED'}};
     const evidence={gmail_message_id:ref.id,gmail_thread_id:message.threadId,vinted_transaction_id:transaction,sender:from,subject,received_at:receivedAt,normalized_body:normalizedBody,normalized_body_sha256:await sha256(normalizedBody),redaction_version:REDACTION_VERSION,parser_version:PARSER_VERSION,event_type,extracted_fields:extractedFields};
@@ -64,7 +65,9 @@ Deno.serve(async () => {
         bundle_item_titles:bundleItems.length?bundleItems:null,template_id:parsed.template_id
       }
     };
-    const response=await rest('rpc/apply_hq_gmail_intake',{method:'POST',body:JSON.stringify({p:event})}); if(!response.ok) throw new Error(`Gmail event ${ref.id} was not recorded: ${await response.text()}`); const outcome=await response.json(); if(!outcome.duplicate){received++;if(outcome.state==='AUTO_APPLIED')applied++;else if(outcome.state==='AUTO_DISMISSED')noise++;else review++;}
+    const response=await rest('rpc/apply_hq_gmail_intake',{method:'POST',body:JSON.stringify({p:event})}); if(!response.ok) throw new Error(`Gmail event ${ref.id} was not recorded: ${await response.text()}`); const outcome=await response.json();
+    const transactionResponse=await rest('rpc/reconcile_hq_vinted_transaction_message',{method:'POST',body:JSON.stringify({p_message_id:ref.id})}); if(!transactionResponse.ok) throw new Error(`Vinted transaction evidence ${ref.id} was not reconciled: ${await transactionResponse.text()}`);
+    if(!outcome.duplicate){received++;if(outcome.state==='AUTO_APPLIED')applied++;else if(outcome.state==='AUTO_DISMISSED')noise++;else review++;}
   }
   return Response.json({received,applied,review,noise});
 });

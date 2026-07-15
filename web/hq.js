@@ -39,14 +39,15 @@ export async function shell(active){
 }
 
 export async function data(){
-  const [{data:ledgerItems,error:ledgerError},{data:legacyItems,error:legacyError},{data:snapshots,error:snapshotsError},{data:reviews,error:reviewsError},{data:events,error:eventsError},{data:gmailEvents,error:gmailError},{data:allGmailReviews,error:gmailReviewError}]=await Promise.all([
+  const [{data:ledgerItems,error:ledgerError},{data:legacyItems,error:legacyError},{data:snapshots,error:snapshotsError},{data:reviews,error:reviewsError},{data:events,error:eventsError},{data:gmailEvents,error:gmailError},{data:transactionExceptions,error:transactionExceptionsError},{data:qualityReport,error:qualityReportError}]=await Promise.all([
     sb.from('hq_ledger_items').select('*').order('item_id'),
     sb.from('hq_items').select('*').order('item_id'),
     sb.from('hq_listing_snapshots').select('*').order('captured_at',{ascending:false}).limit(800),
     sb.from('hq_review_queue').select('*').eq('state','OPEN').order('created_at',{ascending:false}),
     sb.from('hq_ledger_events').select('item_id,event_type,occurred_on,amount,detail,source,created_at,external_key').order('created_at',{ascending:false}).limit(30),
-    sb.from('hq_external_events').select('source_event_id,event_type,state,occurred_at,item_title,amount,vinted_transaction_id,evidence,created_at').eq('source','GMAIL_VINTED').order('created_at',{ascending:false}).limit(20),
-    sb.from('hq_external_events').select('source_event_id,event_type,state,occurred_at,item_title,amount,vinted_transaction_id,evidence,created_at').eq('source','GMAIL_VINTED').eq('state','NEEDS_REVIEW').order('created_at',{ascending:false}).limit(1000)
+    sb.from('hq_external_events').select('source_event_id,event_type,state,occurred_at,item_title,amount,vinted_transaction_id,evidence,created_at').eq('source','GMAIL_VINTED').eq('state','NEEDS_REVIEW').order('created_at',{ascending:false}).limit(1000),
+    sb.from('hq_vinted_operations_exceptions').select('*').order('created_at',{ascending:false}).limit(1000),
+    sb.from('hq_vinted_daily_quality_reports').select('report_date,report,created_at').order('report_date',{ascending:false}).limit(1)
   ]);
   if(snapshotsError||reviewsError) throw (snapshotsError||reviewsError);
   if(ledgerError&&legacyError) throw ledgerError;
@@ -85,10 +86,8 @@ export async function data(){
   });
   const live=[...liveById.values()].filter(snapshot=>linked.get(String(snapshot.vinted_item_id))?.ledger_status!=='SOLD');
   const missing=previousCapturedAt?items.filter(item=>item.ledger_status==='LISTED-BACKLOG'&&item.vinted_item_id&&!latestIds.has(String(item.vinted_item_id))&&!previousIds.has(String(item.vinted_item_id))):[];
-  const pendingGmailReviews=gmailReviewError?pendingExternalReviews(gmailEvents):allGmailReviews||[];
-  const visibleGmailEvents=[...(gmailEvents||[])];
-  pendingGmailReviews.forEach(event=>{if(!visibleGmailEvents.some(row=>row.source_event_id===event.source_event_id))visibleGmailEvents.push(event)});
-  return {items,snapshots:live,reviews:reviews||[],events:events||[],eventsError,gmailEvents:visibleGmailEvents,gmailError:gmailError||gmailReviewError,pendingGmailReviews,source,linked,missing,latestCapturedAt,previousCapturedAt,pendingConfirmation};
+  const pendingGmailReviews=gmailEvents||[];
+  return {items,snapshots:live,reviews:reviews||[],events:events||[],eventsError,gmailEvents:pendingGmailReviews,gmailError,transactionExceptions:transactionExceptions||[],transactionExceptionsError,qualityReport:(qualityReport||[])[0]||null,qualityReportError,pendingGmailReviews,source,linked,missing,latestCapturedAt,previousCapturedAt,pendingConfirmation};
 }
 
 export const statusClass=status=>status==='SOLD'?'sold':status==='LISTED-BACKLOG'?'listed':'unlisted';
