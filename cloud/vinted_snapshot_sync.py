@@ -93,6 +93,11 @@ def eligible_unlisted_items():
     response.raise_for_status()
     return response.json()
 
+def eligible_relist_items(active_vinted_ids):
+    response = requests.get(f"{SUPABASE_URL}/rest/v1/hq_ledger_items", headers={"apikey": SERVICE_KEY, "Authorization": f"Bearer {SERVICE_KEY}"}, params={"select":"item_id,name,category,advantage,estimate_sale_price,vinted_item_id", "ledger_status":"eq.LISTED-BACKLOG", "vinted_item_id":"not.is.null", "limit":"1000"}, timeout=60)
+    response.raise_for_status()
+    return [item for item in response.json() if str(item["vinted_item_id"]) not in active_vinted_ids]
+
 def fetch_new_listing_description(vinted_id):
     """Read public item-page metadata only for a just-discovered listing."""
     # The catalog snapshot is still useful when an individual item page is
@@ -110,8 +115,9 @@ def fetch_new_listing_description(vinted_id):
 
 def auto_link(match, listing):
     item = match["item"]; vinted_id = str(listing["id"]); external_key = f"auto-resolver-link-{vinted_id}"
-    payload = {"action_type":"LISTED", "item_id":item["item_id"], "occurred_on":datetime.now(timezone.utc).date().isoformat(), "amount":amount(listing.get("price")), "vinted_item_id":vinted_id, "listing_url":f"https://www.vinted.pl/items/{vinted_id}", "live_title":listing.get("title"), "note":f"SYSTEM auto-resolver: score {match['score']}; {'; '.join(match['reasons'])}", "source":"SYSTEM", "external_key":external_key}
-    response = requests.post(f"{SUPABASE_URL}/rest/v1/rpc/apply_hq_ledger_action", headers={"apikey": SERVICE_KEY, "Authorization": f"Bearer {SERVICE_KEY}", "Content-Type":"application/json"}, json=payload, timeout=60)
+    relist = bool(item.get("vinted_item_id") and str(item["vinted_item_id"]) != vinted_id)
+    payload = {"action_type":"LISTED", "item_id":item["item_id"], "occurred_on":datetime.now(timezone.utc).date().isoformat(), "amount":amount(listing.get("price")), "vinted_item_id":vinted_id, "listing_url":f"https://www.vinted.pl/items/{vinted_id}", "live_title":listing.get("title"), "note":f"SYSTEM {'relist' if relist else 'auto-resolver'}: score {match['score']}; {'; '.join(match['reasons'])}", "source":"SYSTEM", "external_key":external_key, "relist":relist}
+    response = requests.post(f"{SUPABASE_URL}/rest/v1/rpc/apply_hq_ledger_action", headers={"apikey": SERVICE_KEY, "Authorization": f"Bearer {SERVICE_KEY}", "Content-Type":"application/json"}, json={"p": payload}, timeout=60)
     response.raise_for_status()
     print(f"Auto-linked {vinted_id} -> {item['item_id']} ({match['score']}: {', '.join(match['reasons'])})")
 
@@ -129,7 +135,8 @@ def main():
     seen_before = prior_snapshot_ids([str(item["id"]) for item in live_items])
     response = requests.post(f"{SUPABASE_URL}/rest/v1/hq_listing_snapshots?on_conflict=vinted_item_id,captured_at", headers={"apikey": SERVICE_KEY, "Authorization": f"Bearer {SERVICE_KEY}", "Content-Type": "application/json", "Prefer": "resolution=merge-duplicates,return=minimal"}, json=rows, timeout=60)
     response.raise_for_status(); print(f"Uploaded {len(rows)} DEN-scope Vinted snapshots at {captured_at}")
-    candidates = eligible_unlisted_items()
+    active_vinted_ids = {str(listing["id"]) for listing in live_items}
+    candidates = eligible_unlisted_items() + eligible_relist_items(active_vinted_ids)
     new_listings = [listing for listing in live_items if str(listing["id"]) not in seen_before]
     description_limit = 5
     for listing in new_listings[:description_limit]:
