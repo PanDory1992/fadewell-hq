@@ -235,6 +235,30 @@ python -m unittest cloud.test_vinted_snapshot_sync cloud.test_backfill_vinted_ti
 file-scoped whitespace/diff validation through an approved tool
 ```
 
+#### Gmail parser regression gate
+
+Before deploying a change to `supabase/functions/hq-gmail-sync`, run the
+private fixture gate:
+
+```powershell
+node scripts/verify_gmail_fixtures.mjs
+```
+
+The fixtures live only in the ignored local directory
+`data/private_gmail_fixtures/`. They are anonymized transformations of real
+Vinted mail and are deliberately not committed, attached to a PR, or copied to
+an issue. The fixture manifest records observed mail shapes and explicit gaps;
+an absent mail type is a coverage gap, never a reason to invent a template.
+
+The Step-1 validator checks fixture integrity and privacy. The parser assertion
+runner belongs to Step 3; until it exists, no further parser change is
+deployable. Once introduced, every parser change must run against the complete
+available fixture set. A fixture failure, an unrecognized required field, or a
+newly observed mail shape blocks deployment until the parser either handles it
+safely or routes it to a visible review/exception state. Keep the original
+source evidence private and preserve its provenance in HQ; test copies are not
+a substitute for evidence.
+
 Also run the focused test for the changed subsystem. For a browser bundle, extract/check the inline script syntax if the project uses that validation pattern. For migrations, apply only approved migrations, then check the remote migration list and the affected RPC/table behavior.
 
 ### Database changes
