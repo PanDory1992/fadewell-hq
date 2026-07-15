@@ -5,16 +5,14 @@ const root = resolve(import.meta.dirname, '..');
 const fixtureRoot = resolve(root, 'data/private_gmail_fixtures');
 const manifest = JSON.parse(await readFile(resolve(fixtureRoot, 'manifest.json'), 'utf8'));
 
-const forbidden = [
-  'falka.falka35', 'mikit', 'Sokołowska', 'Warszawa', '01-142',
-  '20867307537', '20939269580', '20929466259', 'pejzazclothes123', 'dajakaja123',
-];
+const forbidden = manifest.redaction_terms;
 const required = ['purchase_single', 'purchase_bundle', 'sale_pending', 'sale_completed', 'shipping_label_en'];
 const failures = [];
 
 if (manifest.version !== 1 || manifest.fixture_policy !== 'private_anonymized_real_mail') {
   failures.push('Manifest does not declare the required private fixture policy.');
 }
+if (!Array.isArray(forbidden) || forbidden.length === 0) failures.push('Manifest does not define private redaction terms.');
 for (const name of required) {
   if (!manifest.fixtures.some((fixture) => fixture.name === name && fixture.observed === true)) {
     failures.push(`Missing observed required fixture: ${name}`);
