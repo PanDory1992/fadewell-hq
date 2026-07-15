@@ -242,6 +242,7 @@ private fixture gate:
 
 ```powershell
 node scripts/verify_gmail_fixtures.mjs
+node scripts/test_vinted_gmail_parser.mjs
 ```
 
 The fixtures live only in the ignored local directory

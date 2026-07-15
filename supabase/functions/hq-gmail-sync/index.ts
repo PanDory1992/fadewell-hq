@@ -1,7 +1,9 @@
 const url = Deno.env.get('SUPABASE_URL')!;
 const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const headers = { apikey: key, authorization: `Bearer ${key}`, 'content-type': 'application/json' };
-const PARSER_VERSION = '2026-07-15.step2-evidence.v1';
+import { VINTED_PARSER_VERSION, nonEmptyLines, parseVintedMail } from './vinted-parser.mjs';
+
+const PARSER_VERSION = VINTED_PARSER_VERSION;
 const REDACTION_VERSION = 'v1';
 const norm = (v: string | null | undefined) => (v || '').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, ' ').trim();
 const decode = (value: string) => new TextDecoder().decode(Uint8Array.from(atob(value.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0)));
@@ -14,12 +16,7 @@ const text = (part: any): string => {
     ? (part.mimeType.toLowerCase() === 'text/html' ? stripHtml(decode(part.body.data)) : decode(part.body.data)) : '';
   return [own, ...(part?.parts || []).map(text)].filter(Boolean).join('\n');
 };
-const lines = (body: string) => body.replace(/\r/g, '').split('\n').map((line) => line.replace(/\s+/g, ' ').trim()).filter(Boolean);
-const afterLabel = (body: string, label: string) => { const all = lines(body); const at = all.findIndex((line) => norm(line) === norm(label)); return at >= 0 ? all[at + 1] || '' : ''; };
-const betweenLabels = (body: string, start: string, end: string) => { const all = lines(body); const at = all.findIndex((line) => norm(line) === norm(start)); const stop = at < 0 ? -1 : all.slice(at + 1).findIndex((line) => norm(line) === norm(end)); return at < 0 ? [] : all.slice(at + 1, stop < 0 ? undefined : at + 1 + stop).filter(Boolean); };
-const money = (body: string, label: string) => { const value = afterLabel(body, label); const m = value.match(/([0-9]+[.,][0-9]+)/); const n = Number((m?.[1] || '').replace(',', '.')); return Number.isFinite(n) && n > 0 ? n : null; };
-const transactionId = (body: string) => body.match(/Transaction ID\s*:?\s*#?(\d+)/i)?.[1] || afterLabel(body, 'Transaction ID').match(/\d+/)?.[0] || null;
-const completedSaleTitle = (body: string) => body.match(/Your sale of\s+([\s\S]*?)\s+was completed successfully/i)?.[1]?.replace(/\s+/g, ' ').trim() || '';
+const lines = nonEmptyLines;
 const safeNormalizedText = (body: string) => {
   const all = lines(body.replace(/https?:\/\/\S+/gi, '[link redacted]'));
   const safe: string[] = []; let redactAddressBlock = false; let redactSeller = false;
@@ -37,11 +34,6 @@ const safeNormalizedText = (body: string) => {
   return safe.join('\n');
 };
 const sha256 = async (value: string) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))), (byte) => byte.toString(16).padStart(2, '0')).join('');
-const field = (value: unknown, status: 'CONFIRMED' | 'PARTIAL' | 'MISSING' = 'CONFIRMED') => ({ value: value ?? null, status: value === null || value === undefined || value === '' ? 'MISSING' : status });
-// Known Vinted non-accounting mail. Recorded as auditable evidence, never queued
-// for a human, never touches the Ledger. An UNKNOWN subject must still fall
-// through to UNCLASSIFIED / NEEDS_REVIEW: fail toward review, not toward silence.
-const NOISE = /(shipping label|etykiet[aę] wysy[łl]kow|new message|nowa wiadomo|added .* to (their )?(favourites|favorites)|dodał.* do ulubionych|left you a review|wystawi[ał].* opini|price drop|obni[żz]ka ceny|newsletter|promo)/i;
 async function rest(path: string, init: RequestInit = {}) { return fetch(`${url}/rest/v1/${path}`, { ...init, headers: { ...headers, ...(init.headers || {}) } }); }
 Deno.serve(async () => {
   const connection=await (await rest('hq_email_connections?provider=eq.gmail&select=refresh_token')).json(); if(!connection?.[0]) return Response.json({error:'Gmail is not connected.'},{status:409});
@@ -52,21 +44,14 @@ Deno.serve(async () => {
   let received=0, applied=0, review=0, noise=0;
   for(const ref of listing.messages||[]) {
     const message=await (await gmail(`messages/${ref.id}?format=full`)).json(); const h=(name:string)=>message.payload.headers.find((x:any)=>x.name?.toLowerCase()===name)?.value||''; const subject=h('subject'), from=h('from'), body=text(message.payload); const trusted=/(?:^|<)no-reply@vinted\.pl>?\s*$/i.test(from.trim()); const receivedAt=new Date(Number(message.internalDate)).toISOString();
-    let event_type='UNCLASSIFIED',item_title='',amount:number|null=null,transaction:string|null=null,bundleItems:string[]=[];
-    if(trusted&&/^Your receipt for/i.test(subject)){
-      const bundleMatch=subject.match(/Bundle\s+(\d+)\s+items?/i); bundleItems=betweenLabels(body,'Order','Paid'); amount=money(body,'Paid'); transaction=transactionId(body);
-      if(bundleMatch&&Number(bundleMatch[1])>1){event_type='PURCHASE_BUNDLE';bundleItems=bundleItems.slice(0,Number(bundleMatch[1]));item_title=bundleItems.join(' · ');}
-      else {event_type='PURCHASE_CONFIRMED';item_title=bundleItems[0]||'';}
-    }
-    else if(trusted&&/^You.ve sold an item on Vinted/i.test(subject)){event_type='SALE_PENDING';const m=body.match(/has bought\s*\n+([^\n]+)\s*\n+\s*[^\d\n]*([0-9]+[.,][0-9]+)/i);item_title=m?.[1]?.trim()||'';amount=m?Number(m[2].replace(',','.')):null;transaction=transactionId(body);}
-    else if(trusted&&/^This order is completed/i.test(subject)){event_type='SALE_CONFIRMED';item_title=completedSaleTitle(body);amount=money(body,'Transferred to your Vinted Balance');transaction=transactionId(body);}
-    else if(trusted&&NOISE.test(subject)){event_type='NOISE';}
+    const parsed=trusted?parseVintedMail({subject,body}):parseVintedMail({subject:'',body:''});
+    const event_type=parsed.event_type,item_title=parsed.item_title,amount=parsed.amount,transaction=parsed.transaction_id,bundleItems=parsed.bundle_items;
     // A machine may book a sale only against a DEN that is actually LISTED on Vinted.
     // LISTED-BACKLOG, not merely "not SOLD" - an unlisted item can never be auto-sold.
     const matches=ledger.filter((i:any)=>i.ledger_status==='LISTED-BACKLOG'&&[i.live_title,i.name].some((v:string)=>norm(v)&&norm(v)===norm(item_title))); const item=matches.length===1?matches[0]:null; const auto=(event_type==='PURCHASE_CONFIRMED'&&!!item_title&&amount!==null)||(event_type==='PURCHASE_BUNDLE'&&bundleItems.length>1&&amount!==null)||(event_type==='SALE_PENDING'&&!!item&&amount!==null&&amount>0)||event_type==='SALE_CONFIRMED';
     const eventState=event_type==='NOISE'?'AUTO_DISMISSED':auto?'AUTO_APPLIED':'NEEDS_REVIEW';
     const normalizedBody=safeNormalizedText(body);
-    const extractedFields={transaction_id:field(transaction),item_title:field(item_title),amount:field(amount),bundle_items:field(bundleItems.length?bundleItems:null),gmail_thread_id:field(message.threadId),received_at:field(receivedAt)};
+    const extractedFields={...parsed.fields,template_id:{value:parsed.template_id,status:'CONFIRMED'},gmail_thread_id:{value:message.threadId,status:'CONFIRMED'},received_at:{value:receivedAt,status:'CONFIRMED'}};
     const evidence={gmail_message_id:ref.id,gmail_thread_id:message.threadId,vinted_transaction_id:transaction,sender:from,subject,received_at:receivedAt,normalized_body:normalizedBody,normalized_body_sha256:await sha256(normalizedBody),redaction_version:REDACTION_VERSION,parser_version:PARSER_VERSION,event_type,extracted_fields:extractedFields};
     const evidenceResponse=await rest('rpc/record_hq_gmail_evidence',{method:'POST',body:JSON.stringify({p:evidence})}); if(!evidenceResponse.ok) throw new Error(`Gmail evidence ${ref.id} was not recorded: ${await evidenceResponse.text()}`);
     const event={
@@ -76,8 +61,7 @@ Deno.serve(async () => {
       evidence:{
         subject,from,gmail_message_id:ref.id,gmail_thread_id:message.threadId,parser_version:PARSER_VERSION,
         body_sha256:evidence.normalized_body_sha256,bundle_item_count:bundleItems.length||null,
-        bundle_item_titles:bundleItems.length?bundleItems:null,item_amount:money(body,'Item'),
-        postage:money(body,'Postage'),buyer_protection_fee:money(body,'Buyer Protection fee')
+        bundle_item_titles:bundleItems.length?bundleItems:null,template_id:parsed.template_id
       }
     };
     const response=await rest('rpc/apply_hq_gmail_intake',{method:'POST',body:JSON.stringify({p:event})}); if(!response.ok) throw new Error(`Gmail event ${ref.id} was not recorded: ${await response.text()}`); const outcome=await response.json(); if(!outcome.duplicate){received++;if(outcome.state==='AUTO_APPLIED')applied++;else if(outcome.state==='AUTO_DISMISSED')noise++;else review++;}
