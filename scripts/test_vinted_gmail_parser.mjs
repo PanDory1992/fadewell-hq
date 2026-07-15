@@ -12,6 +12,10 @@ for (const fixture of manifest.fixtures.filter((fixture) => fixture.observed)) {
   const separator = source.search(/\r?\n\r?\n/);
   const body = separator < 0 ? '' : source.slice(separator).replace(/^\r?\n\r?\n/, '');
   const parsed = parseVintedMail({ subject: fixture.subject, body });
+  if (!fixture.expected_parse || Object.keys(fixture.expected_parse).length === 0) {
+    failures.push(`${fixture.name}: missing expected parser result.`);
+    continue;
+  }
   for (const [key, expected] of Object.entries(fixture.expected_parse || {})) {
     const actual = key in parsed.fields ? parsed.fields[key].value : parsed[key];
     if (JSON.stringify(actual) !== JSON.stringify(expected)) failures.push(`${fixture.name}: ${key} expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}.`);
