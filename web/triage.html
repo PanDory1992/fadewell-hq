@@ -34,6 +34,7 @@
       money,
       itemTitle,
       itemPhoto,
+      isDenimItem,
     } from "./hq.js?v=20260714b";
     const needed = ["brand", "model", "tagged_size", "condition"],
       facts = (x) => x.item_dna?.facts || {},
@@ -45,7 +46,10 @@
         const d = await data(),
           stock = d.items
             .filter(
-              (x) => x.ledger_status === "UNLISTED-BACKLOG" && !complete(x),
+              (x) =>
+                isDenimItem(x) &&
+                x.ledger_status === "UNLISTED-BACKLOG" &&
+                !complete(x),
             )
             .sort(
               (a, b) =>

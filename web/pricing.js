@@ -1,4 +1,4 @@
-import {itemTitle} from './item-title.js';
+import {isDenimItem,itemTitle} from './item-title.js';
 const number=value=>Number(value)||0;
 const sale=item=>item.sale_price_arbitrage??item.sale_price_recycled??null;
 const closePrice=item=>{const value=sale(item);return value===null||value===undefined||value===''?null:number(value);};
@@ -16,6 +16,7 @@ const sameSize=(a,b)=>a!==null&&b!==null?Math.max(0,1-Math.abs(a-b)/8):0;
 
 export function feature(item){const facts=item.item_dna?.facts||{},title=itemTitle(item);return{brand:brand(facts.brand)||brand(title),model:String(facts.model||model(title)||''),size:size(facts.tagged_size)||size(title),fit:normalise(facts.fit),origin:normalise(facts.origin),wash:normalise(facts.wash),era:normalise(facts.era),condition:normalise(facts.condition),words:words(title)};}
 export function comparable(target,candidate){
+  if(!isDenimItem(target)||!isDenimItem(candidate))return null;
   const a=feature(target),b=feature(candidate);
   if(!a.brand||a.brand!==b.brand)return null;
   let score=3,reasons=['marka'];
@@ -30,7 +31,7 @@ export function comparable(target,candidate){
   return{score,weight:score*recencyWeight(candidate),reasons};
 }
 export function estimate(target,sold,options={}){
-  const eligible=sold.filter(item=>item.item_id!==options.excludeId&&closePrice(item)!==null);
+  const eligible=sold.filter(item=>isDenimItem(item)&&item.item_id!==options.excludeId&&closePrice(item)!==null);
   const comps=eligible.map(item=>({item,match:comparable(target,item)})).filter(row=>row.match&&row.match.score>=5).map(row=>({price:closePrice(row.item),weight:row.match.weight,item:row.item,match:row.match}));
   const direct=comps.filter(row=>row.match.reasons.includes(`model ${feature(target).model}`));
   const evidence=direct.length>=2?direct:comps;
@@ -40,7 +41,7 @@ export function estimate(target,sold,options={}){
   return{status:'READY',center,low:Math.min(low,center),high:Math.max(high,center),confidence,comparables:evidence,directCount,reason:`${evidence.length} własnych sprzedaży · ${directCount} z tym samym modelem.`};
 }
 export function calibrate(sold){
-  const ordered=[...sold].filter(item=>closePrice(item)!==null&&item.sold_on).sort((a,b)=>String(a.sold_on).localeCompare(String(b.sold_on)));
+  const ordered=[...sold].filter(item=>isDenimItem(item)&&closePrice(item)!==null&&item.sold_on).sort((a,b)=>String(a.sold_on).localeCompare(String(b.sold_on)));
   const split=Math.floor(ordered.length*.7),train=ordered.slice(0,split),holdout=ordered.slice(split),residuals=[];
   for(const item of holdout){const estimateForHoldout=estimate(item,train);if(estimateForHoldout.status==='READY')residuals.push(Math.abs(closePrice(item)-estimateForHoldout.center));}
   return residuals.length>=6?{status:'CALIBRATED',count:residuals.length,band:quantile(residuals,.8),medianError:median(residuals)}:{status:'PENDING',count:residuals.length,band:null,medianError:null};
@@ -78,6 +79,6 @@ export function recommendation(item,model,signal,calibration){
   return{action:'KEEP',priority:55,reason:'Cena mieści się w estymowanym zakresie; obserwuj kolejny tydzień.',floor,low,high};
 }
 export function buildCockpit(items,snapshots){
-  const sold=items.filter(item=>item.ledger_status==='SOLD'&&closePrice(item)!==null),live=items.filter(item=>item.ledger_status==='LISTED-BACKLOG'&&item.vinted_item_id),calibration=calibrate(sold);
+  const sold=items.filter(item=>isDenimItem(item)&&item.ledger_status==='SOLD'&&closePrice(item)!==null),live=items.filter(item=>isDenimItem(item)&&item.ledger_status==='LISTED-BACKLOG'&&item.vinted_item_id),calibration=calibrate(sold);
   return{calibration,rows:live.map(item=>{const model=estimate(item,sold),signal=listingSignal(item,snapshots),decision=recommendation(item,model,signal,calibration);const range=model.status==='READY'?{low:Math.max(number(item.total_capital),model.low-(calibration.band||0)),center:model.center,high:model.high+(calibration.band||0)}:null;return{item,model,signal,decision,range};}).sort((a,b)=>b.decision.priority-a.decision.priority)};
 }

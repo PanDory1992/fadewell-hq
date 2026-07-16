@@ -1,4 +1,4 @@
-import {itemTitle} from './item-title.js';
+import {isDenimItem,itemTitle} from './item-title.js';
 const n=value=>Number(value)||0;
 const sale=item=>item.sale_price_arbitrage??item.sale_price_recycled??null;
 const normalise=value=>String(value||'').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g,' ').trim();
@@ -17,7 +17,7 @@ const ageCount=(items,limit)=>items.filter(item=>days(item.purchased_on)>limit).
 
 export function buildSourcing(items){
   const grouped=new Map;
-  for(const item of items){
+  for(const item of items.filter(isDenimItem)){
     const f=fact(item),band=sizeBand(f.size),key=[f.brand||'unknown',f.model||'unknown',band].join('|');
     if(!grouped.has(key))grouped.set(key,{key,f:{...f,band},items:[]});
     grouped.get(key).items.push(item);

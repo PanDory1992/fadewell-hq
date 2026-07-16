@@ -100,6 +100,7 @@
       sb,
       itemTitle,
       itemPhoto,
+      isDenimItem,
     } from "./hq.js?v=20260714b";
     let queue = [],
       snapshots = [],
@@ -201,7 +202,10 @@
           ?.split(",");
         queue = d.items
           .filter(
-            (x) => missing(x).length && (!filter || filter.includes(x.item_id)),
+            (x) =>
+              isDenimItem(x) &&
+              missing(x).length &&
+              (!filter || filter.includes(x.item_id)),
           )
           .sort((a, b) => score(b) - score(a));
         render();
