@@ -18,6 +18,7 @@ const brandPatterns=[
   ['carhartt','Carhartt'],['dickies','Dickies'],['fishbone','Fishbone'],['heritage','Heritage'],['petrol','Petrol'],
 ];
 export function inferBrand(value){const source=` ${dnaKey(value)} `;return brandPatterns.find(([needle])=>source.includes(` ${needle} `))?.[1]||'';}
+export function resolveBrand(stored,title=''){const current=canonicalBrand(stored),inferred=inferBrand(title);return inferred&&['','vintage','unknown','nieznana'].includes(dnaKey(current))?inferred:current||inferred;}
 
 const originAliases=new Map([
   ['polska','Poland'],['poland','Poland'],['pl','Poland'],

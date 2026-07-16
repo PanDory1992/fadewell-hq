@@ -108,8 +108,8 @@
     import {
       canonicalDnaFacts,
       DNA_SUGGESTIONS,
-      inferBrand,
-    } from "./dna-normalize.js?v=20260716d";
+      resolveBrand,
+    } from "./dna-normalize.js?v=20260716e";
     let queue = [],
       snapshots = [],
       index = 0;
@@ -146,7 +146,7 @@
         w = t.match(/\bW\d{2}\s*L?\d{0,2}\b/i)?.[0] || "",
         m = t.match(/\b\d{3,4}\b/)?.[0] || "";
       return {
-        brand: facts(x).brand || inferBrand(t) || "",
+        brand: resolveBrand(facts(x).brand, t),
         model: facts(x).model || m,
         tagged_size: facts(x).tagged_size || w,
         wash: facts(x).wash || "",

@@ -1,5 +1,5 @@
 import {isDenimItem,itemTitle} from './item-title.js?v=20260716c';
-import {brandKey,conditionKey,dnaKey,eraBucket,fitBucket,inferBrand,originBucket,washBucket} from './dna-normalize.js?v=20260716d';
+import {brandKey,conditionKey,dnaKey,eraBucket,fitBucket,originBucket,resolveBrand,washBucket} from './dna-normalize.js?v=20260716e';
 const number=value=>Number(value)||0;
 const sale=item=>item.sale_price_arbitrage??item.sale_price_recycled??null;
 const closePrice=item=>{const value=sale(item);return value===null||value===undefined||value===''?null:number(value);};
@@ -14,7 +14,7 @@ const daysBetween=(from,to=new Date())=>{const date=new Date(from);return Number
 const recencyWeight=item=>{const days=daysBetween(item.sold_on);return days===null?.55:.55+.45*Math.exp(-days/365);};
 const sameSize=(a,b)=>a!==null&&b!==null?Math.max(0,1-Math.abs(a-b)/8):0;
 
-export function feature(item){const facts=item.item_dna?.facts||{},title=itemTitle(item);return{brand:brandKey(facts.brand||inferBrand(title)),model:normalise(facts.model||model(title)||''),size:size(facts.tagged_size)||size(title),fit:dnaKey(fitBucket(facts.fit)),origin:dnaKey(originBucket(facts.origin)),wash:dnaKey(washBucket(facts.wash)),era:dnaKey(eraBucket(facts.era)),condition:conditionKey(facts.condition),words:words(title)};}
+export function feature(item){const facts=item.item_dna?.facts||{},title=itemTitle(item);return{brand:brandKey(resolveBrand(facts.brand,title)),model:normalise(facts.model||model(title)||''),size:size(facts.tagged_size)||size(title),fit:dnaKey(fitBucket(facts.fit)),origin:dnaKey(originBucket(facts.origin)),wash:dnaKey(washBucket(facts.wash)),era:dnaKey(eraBucket(facts.era)),condition:conditionKey(facts.condition),words:words(title)};}
 export function comparable(target,candidate){
   if(!isDenimItem(target)||!isDenimItem(candidate))return null;
   const a=feature(target),b=feature(candidate);

@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
-import {brandKey,canonicalBrand,canonicalDnaFacts,canonicalOrigin,eraBucket,fitBucket,originBucket,washBucket} from './dna-normalize.js';
+import {brandKey,canonicalBrand,canonicalDnaFacts,canonicalOrigin,eraBucket,fitBucket,originBucket,resolveBrand,washBucket} from './dna-normalize.js';
 
 assert.equal(brandKey('LEVI’S'),brandKey("Levi's"));
 assert.equal(canonicalBrand('calvin'),'Calvin Klein');
+assert.equal(resolveBrand('Vintage','Vintage Diesel Cheyenne Jeans'),'Diesel');
+assert.equal(resolveBrand('Lee','Vintage Diesel-style Lee Jeans'),'Lee');
 assert.equal(canonicalOrigin('Polska'),'Poland');
 assert.equal(originBucket('Polska'),'Poland');
 assert.equal(originBucket('Mexico'),'CAN & MEX');
