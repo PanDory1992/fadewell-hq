@@ -5,6 +5,15 @@ on:
     # Independent watchdog, offset from the Supabase primary schedule.
     - cron: '7,22,37,52 * * * *'
   workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Execution mode (manual collects now; watchdog tests freshness first)'
+        required: true
+        default: manual
+        type: choice
+        options:
+          - manual
+          - watchdog
 
 permissions:
   contents: read
@@ -30,8 +39,8 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           VINTED_USER_ID: '271911480'
-          COLLECTOR_MODE: ${{ github.event_name == 'schedule' && 'watchdog' || 'manual' }}
-          COLLECTOR_SOURCE: ${{ github.event_name == 'schedule' && 'GITHUB_FALLBACK' || 'GITHUB_MANUAL' }}
+          COLLECTOR_MODE: ${{ (github.event_name == 'schedule' || inputs.mode == 'watchdog') && 'watchdog' || 'manual' }}
+          COLLECTOR_SOURCE: ${{ (github.event_name == 'schedule' || inputs.mode == 'watchdog') && 'GITHUB_FALLBACK' || 'GITHUB_MANUAL' }}
         run: |
           for attempt in 1 2 3; do
             python cloud/vinted_snapshot_sync.py && exit 0

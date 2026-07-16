@@ -38,7 +38,7 @@ Live Wardrobe ma otrzymywać kompletny snapshot co 15 minut bez ręcznego pilnow
 
 ## Ręczne uruchomienie
 
-W GitHub Actions wybierz `Sync Vinted Live Wardrobe` i `Run workflow`. To ścieżka awaryjna; nie omija blokady ani kontroli kompletności.
+W GitHub Actions wybierz `Sync Vinted Live Wardrobe` i `Run workflow`. Domyślny tryb `manual` wykonuje pełny pobór; tryb `watchdog` służy do bezpiecznego testu bramki świeżości i przy świeżym snapshotcie kończy się bez pobierania. Oba tryby respektują blokadę i kontrolę kompletności.
 
 ## Kontrola stanu
 
