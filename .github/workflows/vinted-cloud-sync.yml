@@ -29,8 +29,8 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           VINTED_USER_ID: '271911480'
         run: |
-          for attempt in 1 2 3 4 5; do
+          for attempt in 1 2 3; do
             python cloud/vinted_snapshot_sync.py && exit 0
-            if [ "$attempt" -eq 5 ]; then exit 1; fi
+            if [ "$attempt" -eq 3 ]; then exit 1; fi
             sleep $((attempt * 30))
           done

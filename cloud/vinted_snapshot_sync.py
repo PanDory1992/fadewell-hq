@@ -33,9 +33,7 @@ def condition_label(item):
     value = str(value or "").strip()
     return value or None
 
-def fetch_items(session=None):
-    session = session or cloudscraper.create_scraper()
-    session.get("https://www.vinted.pl", headers=HEADERS, timeout=30)
+def _fetch_catalog_pass(session):
     endpoint = "https://www.vinted.pl/api/v2/catalog/items"; page = 1; anchor = time.time(); total_pages = 1; total_entries = None; items = []
     while page <= total_pages:
         response = session.get(endpoint, params={"user_ids[]": USER_ID, "page": page, "per_page": 96, "time": anchor, "order": "newest_first"}, headers=HEADERS, timeout=30)
@@ -55,9 +53,36 @@ def fetch_items(session=None):
             raise RuntimeError(f"Partial Vinted pagination: page {page}/{advertised_pages} was empty")
         items.extend(batch); total_pages = advertised_pages; anchor = pagination.get("time") or anchor; page += 1
     unique = {int(item["id"]): item for item in items}
-    if total_entries is not None and len(unique) != total_entries:
-        raise RuntimeError(f"Partial Vinted pagination: expected {total_entries} unique items, got {len(unique)}")
-    return unique.values()
+    return unique, total_entries
+
+def fetch_items(session=None, max_passes=4):
+    """Merge repeated catalog passes before deciding the pull is incomplete.
+
+    Vinted can repeat one or more boundary listings on page 2 while still
+    advertising the correct total. Starting the entire workflow again loses
+    the useful IDs from the previous pass, so accumulate them inside one pull.
+    The scoped recent-snapshot guard in ``main`` remains the final integrity
+    check before anything is written to Supabase.
+    """
+    session = session or cloudscraper.create_scraper()
+    session.get("https://www.vinted.pl", headers=HEADERS, timeout=30)
+    combined = {}; advertised_total = None; pass_sizes = []
+    for attempt in range(1, max_passes + 1):
+        unique, total_entries = _fetch_catalog_pass(session)
+        combined.update(unique); pass_sizes.append(len(unique))
+        if total_entries is not None:
+            advertised_total = max(advertised_total or 0, total_entries)
+        if advertised_total is None or len(combined) >= advertised_total:
+            if attempt > 1:
+                print(f"Recovered complete Vinted catalog across {attempt} passes: {len(combined)} unique items")
+            return combined.values()
+        if attempt < max_passes:
+            time.sleep(min(attempt * 2, 5))
+    shortfall = advertised_total - len(combined)
+    if shortfall <= 1:
+        print(f"Vinted advertised {advertised_total}, returned {len(combined)} unique across {max_passes} passes ({pass_sizes}); continuing to scoped snapshot guard")
+        return combined.values()
+    raise RuntimeError(f"Partial Vinted pagination after {max_passes} passes: expected {advertised_total} unique items, got {len(combined)} ({pass_sizes})")
 
 def recent_reference_scope_count():
     response = requests.get(

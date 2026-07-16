@@ -60,10 +60,28 @@ class SnapshotPaginationTests(unittest.TestCase):
     def test_rejects_incomplete_advertised_total(self):
         session = Session([
             {},
+            {"items": [item(1)], "pagination": {"total_pages": 1, "total_entries": 3}},
+        ])
+        with self.assertRaisesRegex(RuntimeError, "expected 3 unique items, got 1"):
+            list(sync.fetch_items(session, max_passes=1))
+
+    def test_defers_one_item_catalog_gap_to_scoped_guard(self):
+        session = Session([
+            {},
             {"items": [item(1)], "pagination": {"total_pages": 1, "total_entries": 2}},
         ])
-        with self.assertRaisesRegex(RuntimeError, "expected 2 unique items, got 1"):
-            list(sync.fetch_items(session))
+        self.assertEqual([row["id"] for row in sync.fetch_items(session, max_passes=1)], [1])
+
+    def test_recovers_duplicates_across_catalog_passes(self):
+        session = Session([
+            {},
+            {"items": [item(1), item(2)], "pagination": {"total_pages": 2, "total_entries": 3, "time": "a"}},
+            {"items": [item(2)], "pagination": {"total_pages": 2, "total_entries": 3, "time": "a"}},
+            {"items": [item(1), item(2)], "pagination": {"total_pages": 2, "total_entries": 3, "time": "b"}},
+            {"items": [item(3)], "pagination": {"total_pages": 2, "total_entries": 3, "time": "b"}},
+        ])
+        with patch.object(sync.time, "sleep"):
+            self.assertEqual({row["id"] for row in sync.fetch_items(session, max_passes=2)}, {1, 2, 3})
 
     def test_relist_payload_uses_the_jsonb_rpc_argument(self):
         match = {"item": {"item_id": "DEN-064", "vinted_item_id": "8717257628"}, "score": 107, "reasons": ["exact relist evidence"]}

@@ -30,14 +30,24 @@ Deno.serve(async (request) => {
   if (!ownerCheck.ok || !(await ownerCheck.json())) return reply({ error: 'HQ owner access is required.' }, 403);
   if (!githubToken) return reply({ error: 'Manual collector trigger is not configured.' }, 503);
 
+  const body = await request.json().catch(() => ({})) as { status_only?: boolean; since?: string };
+
   const active = await github('/repos/PanDory1992/fadewell-hq/actions/workflows/vinted-cloud-sync.yml/runs?per_page=20');
   if (!active.ok) return reply({ error: 'Could not inspect collector status.' }, 502);
-  const activeRun = (await active.json()).workflow_runs?.find((run: { status: string; html_url: string }) => run.status !== 'completed');
-  if (activeRun) return reply({ status: 'already_running', run_url: activeRun.html_url });
+  const runs = (await active.json()).workflow_runs || [];
+  if (body.status_only) {
+    const since = body.since ? new Date(body.since).getTime() - 30000 : 0;
+    const run = runs.find((candidate: { created_at: string }) => new Date(candidate.created_at).getTime() >= since);
+    if (!run) return reply({ status: 'pending' });
+    return reply({ status: run.status, conclusion: run.conclusion, run_url: run.html_url, created_at: run.created_at });
+  }
+  const activeRun = runs.find((run: { status: string; html_url: string }) => run.status !== 'completed');
+  if (activeRun) return reply({ status: 'already_running', run_url: activeRun.html_url, requested_at: activeRun.created_at });
 
+  const requestedAt = new Date().toISOString();
   const dispatched = await github('/repos/PanDory1992/fadewell-hq/actions/workflows/vinted-cloud-sync.yml/dispatches', {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ref: 'main' })
   });
   if (!dispatched.ok) return reply({ error: 'Could not start collector.' }, 502);
-  return reply({ status: 'started' }, 202);
+  return reply({ status: 'started', requested_at: requestedAt }, 202);
 });
