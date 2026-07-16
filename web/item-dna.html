@@ -57,9 +57,17 @@
               placeholder="W32 L32" /></label
           ><label>Wash / kolor<input id="wash" /></label>
         </div>
+        <div class="two-col">
+          <label>Fit<input id="fit" placeholder="np. straight" /></label
+          ><label>Era / rok<input id="era" placeholder="np. 1990s" /></label>
+        </div>
+        <div class="two-col">
+          <label
+            >Kraj produkcji<input id="origin" placeholder="np. USA" /></label
+          ><label
+            >Stan<input id="condition" placeholder="np. bardzo dobry" /></label
+        </div>
         <label
-          >Stan<input id="condition" placeholder="np. bardzo dobry" /></label
-        ><label
           >Dowód / uwaga<textarea
             id="evidence"
             placeholder="np. potwierdzone z metki"
@@ -120,6 +128,9 @@
         model: facts(x).model || m,
         tagged_size: facts(x).tagged_size || w,
         wash: facts(x).wash || "",
+        fit: facts(x).fit || "",
+        era: facts(x).era || "",
+        origin: facts(x).origin || "",
         condition: facts(x).condition || "",
       };
     }
@@ -137,7 +148,16 @@
       photo.hidden = !photo.src;
       count.textContent = `${index + 1} / ${queue.length}`;
       unlock.textContent = `Priorytet odblokowania: ${score(x)} · brak: ${missing(x).join(", ") || "potwierdzenie"}`;
-      ["brand", "model", "tagged_size", "wash", "condition"].forEach(
+      [
+        "brand",
+        "model",
+        "tagged_size",
+        "wash",
+        "fit",
+        "era",
+        "origin",
+        "condition",
+      ].forEach(
         (k) => ($(k).value = p[k] || ""),
       );
       evidence.value = "";
@@ -147,7 +167,16 @@
         f = {
           ...facts(x),
           ...Object.fromEntries(
-            ["brand", "model", "tagged_size", "wash", "condition"]
+            [
+              "brand",
+              "model",
+              "tagged_size",
+              "wash",
+              "fit",
+              "era",
+              "origin",
+              "condition",
+            ]
               .map((k) => [k, $(k).value.trim()])
               .filter(([, v]) => v),
           ),
