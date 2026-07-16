@@ -8,7 +8,7 @@ const model=value=>normalise(value).match(/\b(\d{3,4})\b/)?.[1]||'';
 const waist=value=>{const match=normalise(value).match(/\bw\s?(\d{2})\b/);return match?Number(match[1]):null;};
 const median=values=>{const sorted=[...values].filter(Number.isFinite).sort((a,b)=>a-b),mid=Math.floor(sorted.length/2);return sorted.length?sorted.length%2?sorted[mid]:(sorted[mid-1]+sorted[mid])/2:null;};
 const quantile=(values,p)=>{const sorted=[...values].filter(Number.isFinite).sort((a,b)=>a-b);if(!sorted.length)return null;const index=(sorted.length-1)*p,lo=Math.floor(index),hi=Math.ceil(index);return sorted[lo]+(sorted[hi]-sorted[lo])*(index-lo);};
-const days=(from,to=new Date())=>{const a=new Date(from),b=new Date(to);return Number.isNaN(a.getTime())||Number.isNaN(b.getTime())?null:Math.max(0,Math.floor((b-a)/86400000));};
+const days=(from,to=new Date())=>{if(!from||!to)return null;const a=new Date(from),b=new Date(to);return Number.isNaN(a.getTime())||Number.isNaN(b.getTime())?null:Math.max(0,Math.floor((b-a)/86400000));};
 const sizeBand=value=>value===null?'bez rozmiaru':value<=31?'W28–31':value<=34?'W32–34':'W35+';
 const mode=values=>{const counts=new Map;for(const value of values.filter(Boolean))counts.set(value,(counts.get(value)||0)+1);return [...counts.entries()].sort((a,b)=>b[1]-a[1])[0]?.[0]||'';};
 const fact=item=>{const f=item.item_dna?.facts||{},title=itemTitle(item),brand=resolveBrand(f.brand,title);return{brand,brandKey:brandKey(brand),model:String(f.model||model(title)||''),size:waist(f.tagged_size)||waist(title),fit:fitBucket(f.fit),origin:originBucket(f.origin),era:eraBucket(f.era)};};

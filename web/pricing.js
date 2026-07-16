@@ -10,7 +10,7 @@ const quantile=(values,p)=>{const sorted=[...values].sort((a,b)=>a-b);if(!sorted
 const weightedQuantile=(rows,p)=>{const sorted=[...rows].filter(row=>row.weight>0&&Number.isFinite(row.price)).sort((a,b)=>a.price-b.price);const total=sorted.reduce((sum,row)=>sum+row.weight,0);if(!total)return null;let seen=0;for(const row of sorted){seen+=row.weight;if(seen>=total*p)return row.price;}return sorted.at(-1).price;};
 const size=value=>{const match=normalise(value).match(/\bw\s?(\d{2})\b/);return match?Number(match[1]):null;};
 const model=value=>{const match=normalise(value).match(/\b(\d{3,4})\b/);return match?.[1]||null;};
-const daysBetween=(from,to=new Date())=>{const date=new Date(from);return Number.isNaN(date.getTime())?null:Math.max(0,Math.floor((to-date)/86400000));};
+const daysBetween=(from,to=new Date())=>{if(!from)return null;const date=new Date(from);return Number.isNaN(date.getTime())?null:Math.max(0,Math.floor((to-date)/86400000));};
 const recencyWeight=item=>{const days=daysBetween(item.sold_on);return days===null?.55:.55+.45*Math.exp(-days/365);};
 const sameSize=(a,b)=>a!==null&&b!==null?Math.max(0,1-Math.abs(a-b)/8):0;
 
