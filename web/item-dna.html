@@ -201,7 +201,7 @@
         const params = new URLSearchParams(location.search),
           requested = params.get("item") || params.get("items"),
           filter = requested?.split(",");
-        dnaOptions.innerHTML = Object.entries(DNA_SUGGESTIONS)
+        $("dna-options").innerHTML = Object.entries(DNA_SUGGESTIONS)
           .map(
             ([key, values]) =>
               `<datalist id="${key}-options">${values.map((value) => `<option value="${safe(value)}"></option>`).join("")}</datalist>`,
