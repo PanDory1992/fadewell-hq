@@ -177,15 +177,23 @@
           .sort((a, b) => score(b) - score(a));
         render();
         const confirmButton = $("confirm"),
+          skipButton = $("skip"),
           result = $("result");
         confirmButton.onclick = async () => {
           confirmButton.disabled = true;
+          skipButton.disabled = true;
           result.textContent = "Zapisywanie…";
           try {
             await save();
             queue.splice(index, 1);
             if (index >= queue.length) index = 0;
-            if (queue.length) render();
+            if (queue.length) {
+              render();
+              result.className = "muted small";
+              result.textContent = "";
+              confirmButton.disabled = false;
+              skipButton.disabled = false;
+            }
             else
               app.innerHTML =
                 '<article class="card empty">Kolejka DNA jest pusta.</article>';
@@ -193,6 +201,7 @@
             result.className = "bad";
             result.textContent = e.message || "Nie udało się zapisać DNA.";
             confirmButton.disabled = false;
+            skipButton.disabled = false;
           }
         };
         $("skip").onclick = () => {
