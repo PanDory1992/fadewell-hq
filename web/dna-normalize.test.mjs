@@ -1,0 +1,20 @@
+import assert from 'node:assert/strict';
+import {brandKey,canonicalBrand,canonicalDnaFacts,canonicalOrigin,eraBucket,fitBucket,originBucket,washBucket} from './dna-normalize.js';
+
+assert.equal(brandKey('LEVI’S'),brandKey("Levi's"));
+assert.equal(canonicalBrand('calvin'),'Calvin Klein');
+assert.equal(canonicalOrigin('Polska'),'Poland');
+assert.equal(originBucket('Polska'),'Poland');
+assert.equal(originBucket('Mexico'),'CAN & MEX');
+assert.equal(originBucket('Honduras'),'Latin America');
+assert.equal(originBucket('Turkey'),'EU');
+assert.equal(originBucket('Saudi Arabia'),'EU');
+assert.equal(originBucket('Bangladesh'),'Asia');
+assert.equal(originBucket('Japan'),'Japan');
+assert.equal(fitBucket('Relaxed Tapered'),'Tapered');
+assert.equal(fitBucket('tapered'),'Tapered');
+assert.equal(eraBucket('1995'),'1990s');
+assert.equal(eraBucket('1990s'),'1990s');
+assert.equal(washBucket('MEDIUM BLUE'),'Mid Blue');
+assert.deepEqual(canonicalDnaFacts({brand:'levis',tagged_size:'w 32 l 30',origin:'polska',condition:'BARDZO DOBRY'}),{brand:"Levi's",model:'',tagged_size:'W32 L30',wash:'',fit:'',era:'',origin:'Poland',condition:'Bardzo dobry'});
+console.log('DNA normalization tests passed');

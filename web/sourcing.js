@@ -1,9 +1,9 @@
 import {isDenimItem,itemTitle} from './item-title.js?v=20260716c';
+import {brandKey,canonicalBrand,eraBucket,fitBucket,inferBrand,originBucket} from './dna-normalize.js?v=20260716d';
 const n=value=>Number(value)||0;
 const sale=item=>item.sale_price_arbitrage??item.sale_price_recycled??null;
 const normalise=value=>String(value||'').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g,' ').trim();
 const words=value=>normalise(value).split(' ').filter(Boolean);
-const brand=value=>{const first=words(value).find(word=>word.length>=3);return first?.startsWith('levi')?'Levi\'s':first==='gap'?'GAP':first?first[0].toUpperCase()+first.slice(1):'';};
 const model=value=>normalise(value).match(/\b(\d{3,4})\b/)?.[1]||'';
 const waist=value=>{const match=normalise(value).match(/\bw\s?(\d{2})\b/);return match?Number(match[1]):null;};
 const median=values=>{const sorted=[...values].filter(Number.isFinite).sort((a,b)=>a-b),mid=Math.floor(sorted.length/2);return sorted.length?sorted.length%2?sorted[mid]:(sorted[mid-1]+sorted[mid])/2:null;};
@@ -11,14 +11,14 @@ const quantile=(values,p)=>{const sorted=[...values].filter(Number.isFinite).sor
 const days=(from,to=new Date())=>{const a=new Date(from),b=new Date(to);return Number.isNaN(a.getTime())||Number.isNaN(b.getTime())?null:Math.max(0,Math.floor((b-a)/86400000));};
 const sizeBand=value=>value===null?'bez rozmiaru':value<=31?'W28–31':value<=34?'W32–34':'W35+';
 const mode=values=>{const counts=new Map;for(const value of values.filter(Boolean))counts.set(value,(counts.get(value)||0)+1);return [...counts.entries()].sort((a,b)=>b[1]-a[1])[0]?.[0]||'';};
-const fact=item=>{const f=item.item_dna?.facts||{},title=itemTitle(item);return{brand:brand(f.brand)||brand(title),model:String(f.model||model(title)||''),size:waist(f.tagged_size)||waist(title),fit:f.fit||'',origin:f.origin||'',era:f.era||''};};
+const fact=item=>{const f=item.item_dna?.facts||{},title=itemTitle(item),brand=canonicalBrand(f.brand||inferBrand(title));return{brand,brandKey:brandKey(brand),model:String(f.model||model(title)||''),size:waist(f.tagged_size)||waist(title),fit:fitBucket(f.fit),origin:originBucket(f.origin),era:eraBucket(f.era)};};
 const labelFor=(f,items)=>{const base=[f.brand||'Nieokreślona marka',f.model||'bez modelu',f.band].filter(Boolean).join(' · ');const facts=items.map(fact),suffix=['fit','origin','era'].map(key=>{const value=mode(facts.map(row=>row[key]));return value&&facts.filter(row=>row[key]===value).length/items.length>=.6?value:'';}).filter(Boolean);return suffix.length?`${base} · ${suffix.join(' · ')}`:base;};
 const ageCount=(items,limit)=>items.filter(item=>days(item.purchased_on)>limit).length;
 
 export function buildSourcing(items){
   const grouped=new Map;
   for(const item of items.filter(isDenimItem)){
-    const f=fact(item),band=sizeBand(f.size),key=[f.brand||'unknown',f.model||'unknown',band].join('|');
+    const f=fact(item),band=sizeBand(f.size),key=[f.brandKey||'unknown',normalise(f.model)||'unknown',band,normalise(f.fit)||'unknown-fit',normalise(f.origin)||'unknown-origin'].join('|');
     if(!grouped.has(key))grouped.set(key,{key,f:{...f,band},items:[]});
     grouped.get(key).items.push(item);
   }

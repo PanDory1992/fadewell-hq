@@ -1,4 +1,5 @@
 import {isDenimItem,itemTitle} from './item-title.js?v=20260716c';
+import {brandKey,conditionKey,dnaKey,eraBucket,fitBucket,inferBrand,originBucket,washBucket} from './dna-normalize.js?v=20260716d';
 const number=value=>Number(value)||0;
 const sale=item=>item.sale_price_arbitrage??item.sale_price_recycled??null;
 const closePrice=item=>{const value=sale(item);return value===null||value===undefined||value===''?null:number(value);};
@@ -9,12 +10,11 @@ const quantile=(values,p)=>{const sorted=[...values].sort((a,b)=>a-b);if(!sorted
 const weightedQuantile=(rows,p)=>{const sorted=[...rows].filter(row=>row.weight>0&&Number.isFinite(row.price)).sort((a,b)=>a.price-b.price);const total=sorted.reduce((sum,row)=>sum+row.weight,0);if(!total)return null;let seen=0;for(const row of sorted){seen+=row.weight;if(seen>=total*p)return row.price;}return sorted.at(-1).price;};
 const size=value=>{const match=normalise(value).match(/\bw\s?(\d{2})\b/);return match?Number(match[1]):null;};
 const model=value=>{const match=normalise(value).match(/\b(\d{3,4})\b/);return match?.[1]||null;};
-const brand=value=>{const first=words(value).values().next().value||null;if(!first)return null;if(first.startsWith('levi'))return'levis';return first;};
 const daysBetween=(from,to=new Date())=>{const date=new Date(from);return Number.isNaN(date.getTime())?null:Math.max(0,Math.floor((to-date)/86400000));};
 const recencyWeight=item=>{const days=daysBetween(item.sold_on);return days===null?.55:.55+.45*Math.exp(-days/365);};
 const sameSize=(a,b)=>a!==null&&b!==null?Math.max(0,1-Math.abs(a-b)/8):0;
 
-export function feature(item){const facts=item.item_dna?.facts||{},title=itemTitle(item);return{brand:brand(facts.brand)||brand(title),model:String(facts.model||model(title)||''),size:size(facts.tagged_size)||size(title),fit:normalise(facts.fit),origin:normalise(facts.origin),wash:normalise(facts.wash),era:normalise(facts.era),condition:normalise(facts.condition),words:words(title)};}
+export function feature(item){const facts=item.item_dna?.facts||{},title=itemTitle(item);return{brand:brandKey(facts.brand||inferBrand(title)),model:normalise(facts.model||model(title)||''),size:size(facts.tagged_size)||size(title),fit:dnaKey(fitBucket(facts.fit)),origin:dnaKey(originBucket(facts.origin)),wash:dnaKey(washBucket(facts.wash)),era:dnaKey(eraBucket(facts.era)),condition:conditionKey(facts.condition),words:words(title)};}
 export function comparable(target,candidate){
   if(!isDenimItem(target)||!isDenimItem(candidate))return null;
   const a=feature(target),b=feature(candidate);
@@ -33,7 +33,8 @@ export function comparable(target,candidate){
 export function estimate(target,sold,options={}){
   const eligible=sold.filter(item=>isDenimItem(item)&&item.item_id!==options.excludeId&&closePrice(item)!==null);
   const comps=eligible.map(item=>({item,match:comparable(target,item)})).filter(row=>row.match&&row.match.score>=5).map(row=>({price:closePrice(row.item),weight:row.match.weight,item:row.item,match:row.match}));
-  const direct=comps.filter(row=>row.match.reasons.includes(`model ${feature(target).model}`));
+  const targetFeature=feature(target),modelDirect=comps.filter(row=>row.match.reasons.includes(`model ${targetFeature.model}`)),originDirect=targetFeature.origin?modelDirect.filter(row=>row.match.reasons.includes('origin')):[];
+  const direct=originDirect.length>=2?originDirect:modelDirect;
   const evidence=direct.length>=2?direct:comps;
   if(evidence.length<3)return{status:'INSUFFICIENT',comparables:evidence,reason:'Za mało własnych, porównywalnych sprzedaży.'};
   const center=weightedQuantile(evidence,.5),low=weightedQuantile(evidence,.25),high=weightedQuantile(evidence,.75),directCount=direct.length;

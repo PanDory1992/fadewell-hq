@@ -47,7 +47,7 @@
           <p id="unlock" class="muted small"></p>
         </div>
         <div class="two-col">
-          <label>Marka<input id="brand" /></label
+          <label>Marka<input id="brand" list="brand-options" /></label
           ><label>Model<input id="model" /></label>
         </div>
         <div class="two-col">
@@ -55,17 +55,17 @@
             >Rozmiar z metki<input
               id="tagged_size"
               placeholder="W32 L32" /></label
-          ><label>Wash / kolor<input id="wash" /></label>
+          ><label>Wash / kolor<input id="wash" list="wash-options" /></label>
         </div>
         <div class="two-col">
-          <label>Fit<input id="fit" placeholder="np. straight" /></label
-          ><label>Era / rok<input id="era" placeholder="np. 1990s" /></label>
+          <label>Fit<input id="fit" list="fit-options" placeholder="np. straight" /></label
+          ><label>Era / rok<input id="era" list="era-options" placeholder="np. 1990s" /></label>
         </div>
         <div class="two-col">
           <label
-            >Kraj produkcji<input id="origin" placeholder="np. USA" /></label
+            >Kraj produkcji<input id="origin" list="origin-options" placeholder="np. USA" /></label
           ><label
-            >Stan<input id="condition" placeholder="np. bardzo dobry" /></label
+            >Stan<input id="condition" list="condition-options" placeholder="np. bardzo dobry" /></label
         </div>
         <label
           >Dowód / uwaga<textarea
@@ -79,6 +79,7 @@
           ><span id="result" class="muted small"></span>
         </div>
       </article>
+      <div id="dna-options"></div>
       <aside class="card">
         <h2>Kolejka odblokowania</h2>
         <p class="muted small">
@@ -102,13 +103,31 @@
       itemPhoto,
       isDenimItem,
     } from "./hq.js?v=20260716c";
+    import {
+      canonicalDnaFacts,
+      DNA_SUGGESTIONS,
+      inferBrand,
+    } from "./dna-normalize.js?v=20260716d";
     let queue = [],
       snapshots = [],
       index = 0;
-    const facts = (x) => x.item_dna?.facts || {},
-      required = ["brand", "model", "tagged_size", "condition"],
+    const fields = [
+        "brand",
+        "model",
+        "tagged_size",
+        "wash",
+        "fit",
+        "era",
+        "origin",
+        "condition",
+      ],
+      facts = (x) => x.item_dna?.facts || {},
+      coreRequired = ["brand", "model", "tagged_size", "condition"],
+      required = fields,
       missing = (x) =>
         required.filter((k) => !String(facts(x)[k] || "").trim()),
+      coreMissing = (x) =>
+        coreRequired.filter((k) => !String(facts(x)[k] || "").trim()),
       score = (x) => {
         const f = facts(x),
           key = `${f.brand || ""}|${f.model || ""}`;
@@ -125,7 +144,7 @@
         w = t.match(/\bW\d{2}\s*L?\d{0,2}\b/i)?.[0] || "",
         m = t.match(/\b\d{3,4}\b/)?.[0] || "";
       return {
-        brand: facts(x).brand || t.split(/\s+/)[0] || "",
+        brand: facts(x).brand || inferBrand(t) || "",
         model: facts(x).model || m,
         tagged_size: facts(x).tagged_size || w,
         wash: facts(x).wash || "",
@@ -148,40 +167,22 @@
       photo.src = itemPhoto(x, snapshots) || "";
       photo.hidden = !photo.src;
       count.textContent = `${index + 1} / ${queue.length}`;
-      unlock.textContent = `Priorytet odblokowania: ${score(x)} · brak: ${missing(x).join(", ") || "potwierdzenie"}`;
-      [
-        "brand",
-        "model",
-        "tagged_size",
-        "wash",
-        "fit",
-        "era",
-        "origin",
-        "condition",
-      ].forEach(
+      unlock.textContent = `Priorytet: ${score(x)} · minimum: ${coreMissing(x).length ? `brak ${coreMissing(x).join(", ")}` : "gotowe"} · pełne DNA: brak ${missing(x).join(", ") || "niczego"}`;
+      fields.forEach(
         (k) => ($(k).value = p[k] || ""),
       );
       evidence.value = "";
     }
     async function save() {
       const x = queue[index],
-        f = {
+        f = canonicalDnaFacts({
           ...facts(x),
           ...Object.fromEntries(
-            [
-              "brand",
-              "model",
-              "tagged_size",
-              "wash",
-              "fit",
-              "era",
-              "origin",
-              "condition",
-            ]
+            fields
               .map((k) => [k, $(k).value.trim()])
               .filter(([, v]) => v),
           ),
-        },
+        }),
         { error } = await sb.rpc("update_hq_item_dna_owner", {
           p: {
             item_id: x.item_id,
@@ -197,14 +198,20 @@
       try {
         const d = await data();
         snapshots = d.snapshots;
-        const filter = new URLSearchParams(location.search)
-          .get("items")
-          ?.split(",");
+        const params = new URLSearchParams(location.search),
+          requested = params.get("item") || params.get("items"),
+          filter = requested?.split(",");
+        dnaOptions.innerHTML = Object.entries(DNA_SUGGESTIONS)
+          .map(
+            ([key, values]) =>
+              `<datalist id="${key}-options">${values.map((value) => `<option value="${safe(value)}"></option>`).join("")}</datalist>`,
+          )
+          .join("");
         queue = d.items
           .filter(
             (x) =>
               isDenimItem(x) &&
-              missing(x).length &&
+              (filter || missing(x).length) &&
               (!filter || filter.includes(x.item_id)),
           )
           .sort((a, b) => score(b) - score(a));
