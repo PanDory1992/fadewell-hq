@@ -81,13 +81,15 @@
       </article>
       <div id="dna-options"></div>
       <aside class="card">
-        <h2>Kolejka odblokowania</h2>
+        <h2>Pełne DNA</h2>
         <p class="muted small">
-          Najpierw brakujący fakt, który odblokowuje najwięcej podobnych itemów
-          i segmentów sourcingu.
+          Domyślna kolejka obejmuje tylko jeansy live i unlisted. Prowadzi dalej,
+          aż każdy z nich ma komplet 8 pól analitycznych.
         </p>
         <p class="muted small">
-          Tytuł podpowiada wartości; zapis wymaga Twojego potwierdzenia.
+          W DNA zapisujemy konkretny kraj. Pricing i Sourcing używają w tle
+          wspólnego bucketu kraju oraz fitu. Podpowiedzi są kontrolowane, ale
+          nadal możesz wpisać własną wartość.
         </p>
       </aside>
     </section>
@@ -211,8 +213,11 @@
           .filter(
             (x) =>
               isDenimItem(x) &&
-              (filter || missing(x).length) &&
-              (!filter || filter.includes(x.item_id)),
+              (filter
+                ? filter.includes(x.item_id)
+                : ["LISTED-BACKLOG", "UNLISTED-BACKLOG"].includes(
+                    x.ledger_status,
+                  ) && missing(x).length),
           )
           .sort((a, b) => score(b) - score(a));
         render();
