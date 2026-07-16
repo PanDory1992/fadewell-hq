@@ -8,7 +8,7 @@
 <section id="app" hidden><section id="summary" class="grid"></section><div class="section-title"><h2>Wszystkie itemy</h2><span id="count" class="muted small"></span></div><div class="toolbar"><input id="query" placeholder="Szukaj ID, nazwy, marki, DNA…"><select id="filter"><option value="">Wszystkie statusy</option><option value="LISTED-BACKLOG">Wystawione</option><option value="UNLISTED-BACKLOG">Do wystawienia</option><option value="SOLD">Sprzedane</option></select><select id="sort" aria-label="Sortowanie Ledgeru"><option value="activity">Ostatnia aktywność</option><option value="profit">Zysk netto</option><option value="capital">Kapitał</option><option value="price">Cena</option><option value="stockDays">Dni w stocku</option><option value="liveDays">Dni live</option></select></div><article class="card table-wrap"><table class="ledger-table"><thead><tr><th>Item</th><th>Status</th><th>Kapitał</th><th>Cena</th><th>Dni w stocku</th><th>Dni live</th><th>Zysk netto</th><th>Ostatnia data</th><th></th></tr></thead><tbody id="rows"></tbody></table></article></section>
 <dialog id="detail"><div id="detailBody"></div></dialog></main>
 <script type="module">
-import{shell,data,$,safe,money,sb,statusClass,statusLabel,itemPhoto,date,dateTime,itemTitle,isDenimItem}from'./hq.js?v=20260714b';
+import{shell,data,$,safe,money,sb,statusClass,statusLabel,itemPhoto,date,dateTime,itemTitle,isDenimItem}from'./hq.js?v=20260716c';
 import{buildTimeline}from'./timeline.js';
 let all=[],snapshots=[];const value=n=>Number(n)||0;
 const salePrice=item=>item.sale_price_arbitrage??item.sale_price_recycled??null;

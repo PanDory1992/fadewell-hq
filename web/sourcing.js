@@ -1,4 +1,4 @@
-import {isDenimItem,itemTitle} from './item-title.js';
+import {isDenimItem,itemTitle} from './item-title.js?v=20260716c';
 const n=value=>Number(value)||0;
 const sale=item=>item.sale_price_arbitrage??item.sale_price_recycled??null;
 const normalise=value=>String(value||'').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g,' ').trim();

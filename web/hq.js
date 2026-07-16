@@ -1,5 +1,5 @@
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2';
-export {itemTitle,isDenimItem} from './item-title.js';
+export {itemTitle,isDenimItem} from './item-title.js?v=20260716c';
 
 export const sb=createClient('https://qgjkxtolyhbwpvncwtkn.supabase.co','sb_publishable_4I4sJO02Tudp00ALX2xbaQ_DHptnBLb');
 export const $=id=>document.getElementById(id);

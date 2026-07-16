@@ -1,1 +1,104 @@
-<!doctype html><html lang="pl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sourcing · FADEWELL HQ</title><link rel="stylesheet" href="hq.css"><main><header class="top"><div><div class="eyebrow">FADEWELL HQ · Sourcing</div><h1>Co warto kupować — z własnych wyników.</h1><p class="muted">Reguły są dowodem, nie automatyczną zgodą na zakup.</p></div><span class="badge">Advisory</span></header><nav id="nav"></nav><div class="row-actions"><button id="login">Zaloguj przez GitHub</button><button id="logout" hidden class="secondary">Wyloguj</button><span id="status" class="muted small"></span></div><section id="app" hidden><section id="metrics" class="grid"></section><section class="split"><article class="card"><h2>Kupuj częściej</h2><div id="buy" class="feed"></div></article><article class="card"><h2>Kupuj tylko do limitu</h2><div id="cap" class="feed"></div></article></section><section class="split"><article class="card"><h2>Wstrzymaj / testuj ostrożnie</h2><div id="hold" class="feed"></div></article><article class="card"><h2>Za mało danych</h2><div id="insufficient" class="feed"></div></article></section></section></main><script type="module">import{shell,data,$,safe,money}from'./hq.js?v=20260714b';import{actionCopy,buildSourcing}from'./sourcing.js';const pct=x=>new Intl.NumberFormat('pl-PL',{style:'percent',maximumFractionDigits:0}).format(x||0),missing=x=>{const f=x.item_dna?.facts||{};return !f.brand||!f.model||!f.tagged_size};const card=s=>{const[a,reason]=actionCopy[s.action],blockers=s.items.filter(missing),link=blockers.length?`<p><a class="button" href="item-dna.html?items=${encodeURIComponent(blockers.map(x=>x.item_id).join(','))}">Uzupełnij ${blockers.length} brakujących DNA →</a></p>`:'';return`<details class="feed-item"><summary><b>${safe(s.label)}</b><br><span class="muted small">${safe(a)} · ${s.purchased} kupionych · ${s.sold.length} sprzedanych</span></summary><p class="muted small">${safe(reason)}</p>${s.action==='INSUFFICIENT'?link:''}<div class="detail-grid"><div><span class="muted small">Sprzedawalność</span><br><b>${pct(s.soldRate)}</b></div><div><span class="muted small">Limit kapitału</span><br><b>${s.capitalCeiling===null?'—':money(s.capitalCeiling)}</b></div><div><span class="muted small">Kapitał w stocku</span><br><b>${money(s.capitalFrozen)}</b></div><div><span class="muted small">Stock 30 / 60 / 90+</span><br><b>${s.old30} / ${s.old60} / ${s.old90}</b></div></div></details>`};if(await shell('sourcing.html')){app.hidden=false;try{const d=await data(),segments=buildSourcing(d.items),by=a=>segments.filter(x=>x.action===a),ready=segments.filter(x=>x.evidence==='READY');metrics.innerHTML=[['Segmenty z dowodem',ready.length],['Kupuj częściej',by('BUY_MORE').length],['Limit kapitału',by('CAP').length],['Do uzupełnienia',by('INSUFFICIENT').length]].map(([a,v])=>`<article class="card metric"><div class="n">${safe(v)}</div><div class="label">${safe(a)}</div></article>`).join('');[['buy','BUY_MORE'],['cap','CAP'],['hold','HOLD'],['insufficient','INSUFFICIENT']].forEach(([id,a])=>$(id).innerHTML=by(a).map(card).join('')||'<p class="empty">Brak segmentów.</p>')}catch(e){app.innerHTML=`<div class="notice">Nie udało się wczytać Sourcing: ${safe(e.message||e)}</div>`}}</script></html>
+<!doctype html>
+<html lang="pl">
+  <meta charset="utf-8" /><meta
+    name="viewport"
+    content="width=device-width,initial-scale=1"
+  /><title>Sourcing · FADEWELL HQ</title
+  ><link rel="stylesheet" href="hq.css" />
+  <main>
+    <header class="top">
+      <div>
+        <div class="eyebrow">FADEWELL HQ · Sourcing</div>
+        <h1>Co warto kupować — z własnych wyników.</h1>
+        <p class="muted">Reguły są dowodem, nie automatyczną zgodą na zakup.</p>
+      </div>
+      <span class="badge">Advisory</span>
+    </header>
+    <nav id="nav"></nav>
+    <div class="row-actions">
+      <button id="login">Zaloguj przez GitHub</button
+      ><button id="logout" hidden class="secondary">Wyloguj</button
+      ><span id="status" class="muted small"></span>
+    </div>
+    <section id="app" hidden>
+      <section id="metrics" class="grid"></section>
+      <section class="split">
+        <article class="card">
+          <h2>Kupuj częściej</h2>
+          <div id="buy" class="feed"></div>
+        </article>
+        <article class="card">
+          <h2>Kupuj tylko do limitu</h2>
+          <div id="cap" class="feed"></div>
+        </article>
+      </section>
+      <section class="split">
+        <article class="card">
+          <h2>Wstrzymaj / testuj ostrożnie</h2>
+          <div id="hold" class="feed"></div>
+        </article>
+        <article class="card">
+          <h2>Za mało danych</h2>
+          <div id="insufficient" class="feed"></div>
+        </article>
+      </section>
+    </section>
+  </main>
+  <script type="module">
+    import { shell, data, $, safe, money } from "./hq.js?v=20260716c";
+    import {
+      actionCopy,
+      buildSourcing,
+    } from "./sourcing.js?v=20260716c";
+    const pct = (x) =>
+        new Intl.NumberFormat("pl-PL", {
+          style: "percent",
+          maximumFractionDigits: 0,
+        }).format(x || 0),
+      missing = (x) => {
+        const f = x.item_dna?.facts || {};
+        return !f.brand || !f.model || !f.tagged_size;
+      };
+    const card = (s) => {
+      const [a, reason] = actionCopy[s.action],
+        blockers = s.items.filter(missing),
+        link = blockers.length
+          ? `<p><a class="button" href="item-dna.html?items=${encodeURIComponent(blockers.map((x) => x.item_id).join(","))}">Uzupełnij ${blockers.length} brakujących DNA →</a></p>`
+          : "";
+      return `<details class="feed-item"><summary><b>${safe(s.label)}</b><br><span class="muted small">${safe(a)} · ${s.purchased} kupionych · ${s.sold.length} sprzedanych</span></summary><p class="muted small">${safe(reason)}</p>${s.action === "INSUFFICIENT" ? link : ""}<div class="detail-grid"><div><span class="muted small">Sprzedawalność</span><br><b>${pct(s.soldRate)}</b></div><div><span class="muted small">Limit kapitału</span><br><b>${s.capitalCeiling === null ? "—" : money(s.capitalCeiling)}</b></div><div><span class="muted small">Kapitał w stocku</span><br><b>${money(s.capitalFrozen)}</b></div><div><span class="muted small">Stock 30 / 60 / 90+</span><br><b>${s.old30} / ${s.old60} / ${s.old90}</b></div></div></details>`;
+    };
+    if (await shell("sourcing.html")) {
+      app.hidden = false;
+      try {
+        const d = await data(),
+          segments = buildSourcing(d.items),
+          by = (a) => segments.filter((x) => x.action === a),
+          ready = segments.filter((x) => x.evidence === "READY");
+        metrics.innerHTML = [
+          ["Segmenty z dowodem", ready.length],
+          ["Kupuj częściej", by("BUY_MORE").length],
+          ["Limit kapitału", by("CAP").length],
+          ["Do uzupełnienia", by("INSUFFICIENT").length],
+        ]
+          .map(
+            ([a, v]) =>
+              `<article class="card metric"><div class="n">${safe(v)}</div><div class="label">${safe(a)}</div></article>`,
+          )
+          .join("");
+        [
+          ["buy", "BUY_MORE"],
+          ["cap", "CAP"],
+          ["hold", "HOLD"],
+          ["insufficient", "INSUFFICIENT"],
+        ].forEach(
+          ([id, a]) =>
+            ($(id).innerHTML =
+              by(a).map(card).join("") ||
+              '<p class="empty">Brak segmentów.</p>'),
+        );
+      } catch (e) {
+        app.innerHTML = `<div class="notice">Nie udało się wczytać Sourcing: ${safe(e.message || e)}</div>`;
+      }
+    }
+  </script>
+</html>

@@ -1,4 +1,4 @@
-import {isDenimItem,itemTitle} from './item-title.js';
+import {isDenimItem,itemTitle} from './item-title.js?v=20260716c';
 const number=value=>Number(value)||0;
 const sale=item=>item.sale_price_arbitrage??item.sale_price_recycled??null;
 const closePrice=item=>{const value=sale(item);return value===null||value===undefined||value===''?null:number(value);};
