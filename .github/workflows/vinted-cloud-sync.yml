@@ -24,6 +24,8 @@ jobs:
           python-version: '3.11'
       - run: pip install --disable-pip-version-check cloudscraper requests
       - name: Fetch and upload a complete Vinted snapshot
+        id: collect
+        continue-on-error: ${{ github.event_name == 'schedule' }}
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -34,3 +36,6 @@ jobs:
             if [ "$attempt" -eq 3 ]; then exit 1; fi
             sleep $((attempt * 30))
           done
+      - name: Keep scheduled Vinted failure visible without notification spam
+        if: ${{ github.event_name == 'schedule' && steps.collect.outcome == 'failure' }}
+        run: echo "::warning title=Vinted collector stale::Vinted did not return a complete catalog. No partial snapshot was saved; HQ freshness remains the operational alert."
