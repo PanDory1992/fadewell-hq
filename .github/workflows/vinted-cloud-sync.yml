@@ -1,9 +1,6 @@
 name: Sync Vinted Live Wardrobe
 
 on:
-  schedule:
-    # Independent watchdog, offset from the Supabase primary schedule.
-    - cron: '7,22,37,52 * * * *'
   workflow_dispatch:
     inputs:
       mode:
@@ -34,19 +31,19 @@ jobs:
       - run: pip install --disable-pip-version-check cloudscraper requests
       - name: Check freshness and run the fallback only when needed
         id: collect
-        continue-on-error: ${{ github.event_name == 'schedule' }}
+        continue-on-error: ${{ inputs.mode == 'watchdog' }}
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           VINTED_USER_ID: '271911480'
-          COLLECTOR_MODE: ${{ (github.event_name == 'schedule' || inputs.mode == 'watchdog') && 'watchdog' || 'manual' }}
-          COLLECTOR_SOURCE: ${{ (github.event_name == 'schedule' || inputs.mode == 'watchdog') && 'GITHUB_FALLBACK' || 'GITHUB_MANUAL' }}
+          COLLECTOR_MODE: ${{ inputs.mode == 'watchdog' && 'watchdog' || 'manual' }}
+          COLLECTOR_SOURCE: ${{ inputs.mode == 'watchdog' && 'GITHUB_FALLBACK' || 'GITHUB_MANUAL' }}
         run: |
           for attempt in 1 2 3; do
             python cloud/vinted_snapshot_sync.py && exit 0
             if [ "$attempt" -eq 3 ]; then exit 1; fi
             sleep $((attempt * 30))
           done
-      - name: Keep scheduled Vinted failure visible without notification spam
-        if: ${{ github.event_name == 'schedule' && steps.collect.outcome == 'failure' }}
+      - name: Keep watchdog failure visible without notification spam
+        if: ${{ inputs.mode == 'watchdog' && steps.collect.outcome == 'failure' }}
         run: echo "::warning title=Vinted collector stale::Vinted did not return a complete catalog. No partial snapshot was saved; HQ freshness remains the operational alert."
