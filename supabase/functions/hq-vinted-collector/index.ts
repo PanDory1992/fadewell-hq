@@ -41,7 +41,7 @@ async function catalogPass(cookie:string){
   return{items:new Map(items.map(item=>[String(item.id),item])),totalEntries};
 }
 
-async function fetchItems(){
+async function fetchItemsOnce(){
   const home=await fetch('https://www.vinted.pl',{headers,signal:AbortSignal.timeout(30000)});if(!home.ok)throw new Error(`Vinted home HTTP ${home.status}`);const cookie=cookieHeader(home);
   const combined=new Map<string,Record<string,unknown>>();let advertisedTotal:number|null=null;const passSizes:number[]=[];
   for(let pass=1;pass<=4;pass++){
@@ -51,6 +51,20 @@ async function fetchItems(){
   }
   const shortfall=(advertisedTotal||combined.size)-combined.size;if(shortfall<=1)return{items:[...combined.values()],passSizes,advertisedTotal};
   throw new Error(`Partial Vinted pagination after 4 passes: expected ${advertisedTotal}, got ${combined.size} (${passSizes.join(',')})`);
+}
+
+function retryableVintedError(error:unknown){
+  const message=error instanceof Error?error.message:String(error),name=error instanceof Error?error.name:'';
+  return name==='TimeoutError'||name==='TypeError'||/^Vinted (?:home|catalog) HTTP (?:403|429|5\d\d)\b/.test(message)||/^Partial Vinted pagination/.test(message)||/^Vinted total changed mid-pull/.test(message);
+}
+
+async function fetchItems(){
+  let lastError:unknown;
+  for(let attempt=1;attempt<=3;attempt++){
+    try{return await fetchItemsOnce();}
+    catch(error){lastError=error;if(!retryableVintedError(error)||attempt===3)throw error;await new Promise(resolve=>setTimeout(resolve,attempt*2500));}
+  }
+  throw lastError||new Error('Vinted collection failed without an error');
 }
 
 async function referenceCount(){
