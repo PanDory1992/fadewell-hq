@@ -27,6 +27,7 @@ Live Wardrobe ma otrzymywać kompletny snapshot co 15 minut bez ręcznego pilnow
 ## Normalny przebieg
 
 - Supabase zdobywa dzierżawę, pobiera wszystkie strony Vinted, scala stabilne przebiegi, sprawdza kompletność i zapisuje snapshot.
+- Przy przejściowym 403/429/5xx, timeout albo częściowej paginacji Edge wykonuje do trzech pełnych prób z nową sesją Vinted; błędy bezpieczeństwa i 401 nie są maskowane retry.
 - GitHub watchdog widzi świeży snapshot i kończy się sukcesem bez uruchamiania collectora.
 - Brak maila z GitHuba jest stanem normalnym.
 
