@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import {isDenimItem,itemTitle} from './item-title.js';
 
+assert.equal(itemTitle({name:'Archiwalny skrót',live_title:'Tytuł Vinted',manual_title:'Tytuł wybrany w HQ'}),'Tytuł wybrany w HQ');
+
 assert.equal(itemTitle({name:'Archiwalny skrót',live_title:'Levi’s 521 Comfort Tapered Jeans'}),'Levi’s 521 Comfort Tapered Jeans');
 assert.equal(itemTitle({name:'Archiwalny skrót'}),'Archiwalny skrót');
 assert.equal(itemTitle({live_title:'   ',name:'Nazwa zakupu'}),'Nazwa zakupu');
