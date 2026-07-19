@@ -35,7 +35,7 @@
       itemTitle,
       itemPhoto,
       isDenimItem,
-    } from "./hq.js?v=20260716c";
+    } from "./hq.js?v=20260719-title";
     const needed = ["brand", "model", "tagged_size", "condition"],
       facts = (x) => x.item_dna?.facts || {},
       missing = (x) => needed.filter((k) => !String(facts(x)[k] || "").trim()),

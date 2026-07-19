@@ -1,5 +1,6 @@
-// One HQ naming rule: Vinted title when verified; internal purchase shorthand only as fallback.
-export const itemTitle=item=>[item?.live_title,item?.name].map(value=>String(value||'').trim()).find(Boolean)||'Bez nazwy';
+// An explicit HQ title is an owner decision. Vinted's observed title and the
+// original purchase title remain separate provenance rather than being replaced.
+export const itemTitle=item=>[item?.manual_title,item?.live_title,item?.name].map(value=>String(value||'').trim()).find(Boolean)||'Bez nazwy';
 
 // Item DNA, denim Pricing and denim Sourcing share one scope rule. The ledger
 // stays category-complete; only clearly non-denim garment types opt out.
