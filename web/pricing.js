@@ -48,13 +48,13 @@ export function calibrate(sold){
   return residuals.length>=6?{status:'CALIBRATED',count:residuals.length,band:quantile(residuals,.8),medianError:median(residuals)}:{status:'PENDING',count:residuals.length,band:null,medianError:null};
 }
 export function listingHistory(item,snapshots){return snapshots.filter(row=>String(row.vinted_item_id)===String(item.vinted_item_id)).sort((a,b)=>String(a.captured_at).localeCompare(String(b.captured_at)));}
-export function listingSignal(item,snapshots){
+export function listingSignal(item,snapshots,now=new Date()){
   const rows=listingHistory(item,snapshots),latest=rows.at(-1),first=rows[0];
   const weekAgo=latest?new Date(new Date(latest.captured_at).getTime()-7*86400000):null;
   const baseline=[...rows].reverse().find(row=>weekAgo&&new Date(row.captured_at)<=weekAgo);
   const priceChanges=rows.filter((row,index)=>index&&number(row.price_pln)!==number(rows[index-1].price_pln));
   const historyDays=latest&&first?daysBetween(first.captured_at,new Date(latest.captured_at)):null;
-  return{rows,latest,first,historyDays,likes:latest?number(latest.favourites):null,likesDelta:latest&&baseline?number(latest.favourites)-number(baseline.favourites):null,viewsDelta:null,priceChanges,daysLive:daysBetween(item.listed_on),snapshotAge:latest?daysBetween(latest.captured_at):null,price:number(latest?.price_pln??item.live_list_price),startPrice:number(first?.price_pln??item.live_list_price)};
+  return{rows,latest,first,historyDays,likes:latest?number(latest.favourites):null,likesDelta:latest&&baseline?number(latest.favourites)-number(baseline.favourites):null,viewsDelta:null,priceChanges,daysLive:daysBetween(item.listed_on,now),snapshotAge:latest?daysBetween(latest.captured_at,now):null,price:number(latest?.price_pln??item.live_list_price),startPrice:number(first?.price_pln??item.live_list_price)};
 }
 const roundToFive=value=>Math.round(value/5)*5;
 const priceText=value=>`${new Intl.NumberFormat('pl-PL',{maximumFractionDigits:0}).format(number(value))} zł`;
@@ -79,7 +79,7 @@ export function recommendation(item,model,signal,calibration){
   if(days>=21&&signal.likes===0)return{action:'PRESENTATION',priority:80,reason:'0 likes po 21 dniach; najpierw sprawdź zdjęcie główne, tytuł i wymiary.',floor,low,high};
   return{action:'KEEP',priority:55,reason:'Cena mieści się w estymowanym zakresie; obserwuj kolejny tydzień.',floor,low,high};
 }
-export function buildCockpit(items,snapshots){
+export function buildCockpit(items,snapshots,now=new Date()){
   const sold=items.filter(item=>isDenimItem(item)&&item.ledger_status==='SOLD'&&closePrice(item)!==null),live=items.filter(item=>isDenimItem(item)&&item.ledger_status==='LISTED-BACKLOG'&&item.vinted_item_id),calibration=calibrate(sold);
-  return{calibration,rows:live.map(item=>{const model=estimate(item,sold),signal=listingSignal(item,snapshots),decision=recommendation(item,model,signal,calibration);const range=model.status==='READY'?{low:Math.max(number(item.total_capital),model.low-(calibration.band||0)),center:model.center,high:model.high+(calibration.band||0)}:null;return{item,model,signal,decision,range};}).sort((a,b)=>b.decision.priority-a.decision.priority)};
+  return{calibration,rows:live.map(item=>{const model=estimate(item,sold),signal=listingSignal(item,snapshots,now),decision=recommendation(item,model,signal,calibration);const range=model.status==='READY'?{low:Math.max(number(item.total_capital),model.low-(calibration.band||0)),center:model.center,high:model.high+(calibration.band||0)}:null;return{item,model,signal,decision,range};}).sort((a,b)=>b.decision.priority-a.decision.priority)};
 }
