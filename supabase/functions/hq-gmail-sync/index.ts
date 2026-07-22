@@ -83,7 +83,7 @@ Deno.serve(async () => {
     const ledger = await readJson(await rest('hq_ledger_items?select=item_id,name,live_title,ledger_status&limit=1000'), 'HQ ledger lookup');
     scanned = refs.length;
     for(const ref of refs) {
-    const message=await (await gmail(`messages/${ref.id}?format=full`)).json(); const h=(name:string)=>message.payload.headers.find((x:any)=>x.name?.toLowerCase()===name)?.value||''; const subject=h('subject'), from=h('from'), body=text(message.payload); const trusted=/(?:^|<)no-reply@vinted\.pl>?\s*$/i.test(from.trim()); const receivedAt=new Date(Number(message.internalDate)).toISOString();
+    const message=await gmail(`messages/${ref.id}?format=full`); const h=(name:string)=>message.payload.headers.find((x:any)=>x.name?.toLowerCase()===name)?.value||''; const subject=h('subject'), from=h('from'), body=text(message.payload); const trusted=/(?:^|<)no-reply@vinted\.pl>?\s*$/i.test(from.trim()); const receivedAt=new Date(Number(message.internalDate)).toISOString();
     const parsed=trusted?parseVintedMail({subject,body}):parseVintedMail({subject:'',body:''});
     const event_type=parsed.event_type,item_title=parsed.item_title,amount=parsed.amount,transaction=parsed.transaction_id,bundleItems=parsed.bundle_items;
     // A machine may book a sale only against a DEN that is actually LISTED on Vinted.
