@@ -12,6 +12,8 @@ export const toast=message=>{const el=document.createElement('div');el.className
 
 const pages=[['index.html','Dziś · Home'],['operations.html','Dziś · Operations'],['kpi.html','Pieniądze · KPI'],['finance.html','Pieniądze · Finanse'],['pricing.html','Pieniądze · Pricing'],['ledger.html','Stock · Ledger'],['wardrobe.html','Stock · Live wardrobe'],['triage.html','Stock · Triage'],['item-dna.html','Stock · Item DNA'],['sourcing.html','Stock · Sourcing'],['actions.html','Akcje · Action Studio'],['system.html','System']];
 
+pages.splice(pages.findIndex(page=>page[0]==='kpi.html'),1);
+
 export async function shell(active){
   if(!document.querySelector('link[href="polish.css"]'))document.head.insertAdjacentHTML('beforeend','<link rel="stylesheet" href="polish.css">');
   $('nav').innerHTML=pages.map(([href,label])=>`<a class="${href===active?'active':''}" href="${href}">${label}</a>`).join('')+`<button class="secondary" id="globalSearch" title="Ctrl+K">⌕</button>`;
@@ -30,16 +32,11 @@ export async function shell(active){
   const {data:owner,error}=await sb.rpc('claim_first_hq_owner');
   if(error||!owner){$('status').textContent=error?.message||'To konto nie ma dostępu ownera.';return false;}
   $('login').hidden=true;$('logout').hidden=false;$('status').textContent=session.user.email||'HQ owner';
-  if(!['actions.html','operations.html','item-dna.html'].includes(active)){
-    let lastRefresh=Date.now();
-    window.setInterval(()=>{lastRefresh=Date.now();location.reload();},60000);
-    document.addEventListener('visibilitychange',()=>{if(!document.hidden&&Date.now()-lastRefresh>10000){lastRefresh=Date.now();location.reload();}});
-  }
   return true;
 }
 
 export async function data(){
-  const [{data:ledgerItems,error:ledgerError},{data:legacyItems,error:legacyError},{data:snapshots,error:snapshotsError},{data:reviews,error:reviewsError},{data:events,error:eventsError},{data:gmailEvents,error:gmailError},{data:transactionExceptions,error:transactionExceptionsError},{data:qualityReport,error:qualityReportError},{data:collectorHealth,error:collectorHealthError}]=await Promise.all([
+  const [{data:ledgerItems,error:ledgerError},{data:legacyItems,error:legacyError},{data:snapshots,error:snapshotsError},{data:reviews,error:reviewsError},{data:events,error:eventsError},{data:gmailEvents,error:gmailError},{data:transactionExceptions,error:transactionExceptionsError},{data:qualityReport,error:qualityReportError},{data:collectorHealth,error:collectorHealthError},{data:emailSyncState,error:emailSyncError},{data:emailSyncRuns,error:emailSyncRunsError}]=await Promise.all([
     sb.from('hq_ledger_items').select('*').order('item_id'),
     sb.from('hq_items').select('*').order('item_id'),
     sb.from('hq_listing_snapshots').select('*').order('captured_at',{ascending:false}).limit(800),
@@ -48,7 +45,9 @@ export async function data(){
     sb.from('hq_external_events').select('source_event_id,event_type,state,occurred_at,item_title,amount,vinted_transaction_id,evidence,created_at').eq('source','GMAIL_VINTED').eq('state','NEEDS_REVIEW').order('created_at',{ascending:false}).limit(1000),
     sb.from('hq_vinted_operations_exceptions').select('*').order('created_at',{ascending:false}).limit(1000),
     sb.from('hq_vinted_daily_quality_reports').select('report_date,report,created_at').order('report_date',{ascending:false}).limit(1),
-    sb.from('hq_collector_control').select('*').eq('collector_key','vinted_live').maybeSingle()
+    sb.from('hq_collector_control').select('*').eq('collector_key','vinted_live').maybeSingle(),
+    sb.from('hq_email_sync_state').select('*').eq('provider','gmail').maybeSingle(),
+    sb.from('hq_email_sync_runs').select('*').eq('provider','gmail').order('started_at',{ascending:false}).limit(1)
   ]);
   if(snapshotsError||reviewsError) throw (snapshotsError||reviewsError);
   if(ledgerError&&legacyError) throw ledgerError;
@@ -88,7 +87,7 @@ export async function data(){
   const live=[...liveById.values()].filter(snapshot=>linked.get(String(snapshot.vinted_item_id))?.ledger_status!=='SOLD');
   const missing=previousCapturedAt?items.filter(item=>item.ledger_status==='LISTED-BACKLOG'&&item.vinted_item_id&&!latestIds.has(String(item.vinted_item_id))&&!previousIds.has(String(item.vinted_item_id))):[];
   const pendingGmailReviews=gmailEvents||[];
-  return {items,snapshots:live,reviews:reviews||[],events:events||[],eventsError,gmailEvents:pendingGmailReviews,gmailError,transactionExceptions:transactionExceptions||[],transactionExceptionsError,qualityReport:(qualityReport||[])[0]||null,qualityReportError,collectorHealth:collectorHealth||null,collectorHealthError,pendingGmailReviews,source,linked,missing,latestCapturedAt,previousCapturedAt,pendingConfirmation};
+  return {items,snapshots:live,reviews:reviews||[],events:events||[],eventsError,gmailEvents:pendingGmailReviews,gmailError,transactionExceptions:transactionExceptions||[],transactionExceptionsError,qualityReport:(qualityReport||[])[0]||null,qualityReportError,collectorHealth:collectorHealth||null,collectorHealthError,emailSyncState:emailSyncState||null,emailSyncError,emailSyncRun:(emailSyncRuns||[])[0]||null,emailSyncRunsError,pendingGmailReviews,source,linked,missing,latestCapturedAt,previousCapturedAt,pendingConfirmation};
 }
 
 export const statusClass=status=>status==='SOLD'?'sold':status==='LISTED-BACKLOG'?'listed':'unlisted';
