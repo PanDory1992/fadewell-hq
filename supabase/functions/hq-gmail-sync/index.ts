@@ -106,8 +106,14 @@ Deno.serve(async () => {
       }
     };
     const response=await rest('rpc/apply_hq_gmail_intake',{method:'POST',body:JSON.stringify({p:event})}); if(!response.ok) throw new Error(`Gmail event ${ref.id} was not recorded: ${await response.text()}`); const outcome=await response.json();
+    let resolvedState=outcome.state;
+    if(event_type==='SALE_PENDING'&&outcome.state==='NEEDS_REVIEW'){
+      const reconciliation=await rest('rpc/reconcile_hq_manual_sale_evidence',{method:'POST',body:JSON.stringify({p_source_event_id:ref.id})});
+      const reconciliationOutcome=await readJson(reconciliation,`Manual-sale reconciliation ${ref.id}`);
+      resolvedState=reconciliationOutcome.state||resolvedState;
+    }
     const transactionResponse=await rest('rpc/reconcile_hq_vinted_transaction_message',{method:'POST',body:JSON.stringify({p_message_id:ref.id})}); if(!transactionResponse.ok) throw new Error(`Vinted transaction evidence ${ref.id} was not reconciled: ${await transactionResponse.text()}`);
-    if(!outcome.duplicate){received++;if(outcome.state==='AUTO_APPLIED')applied++;else if(outcome.state==='AUTO_DISMISSED')noise++;else review++;}
+    if(!outcome.duplicate){received++;if(resolvedState==='AUTO_APPLIED')applied++;else if(resolvedState==='AUTO_DISMISSED')noise++;else if(resolvedState==='NEEDS_REVIEW')review++;}
     }
     const finishedAt = new Date().toISOString();
     await patchSyncState({ last_success_at: finishedAt, last_finished_at: finishedAt, last_error: null, last_scanned_count: scanned, last_received_count: received, last_applied_count: applied, last_review_count: review, last_noise_count: noise });
