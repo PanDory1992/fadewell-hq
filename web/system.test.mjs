@@ -10,6 +10,8 @@ assert.match(system,/POŁĄCZONO — TRWA PIERWSZA SYNCHRONIZACJA/);
 assert.match(system,/Odczytaj nowe maile/);
 assert.match(system,/tylko maile nowsze od ostatniej udanej synchronizacji/);
 assert.match(system,/Ostatnie zdarzenie biznesowe z Gmaila/);
+assert.match(system,/run\.status==='SUCCEEDED'\?run\.finished_at:null/,'A fresh successful sync run must keep Gmail healthy even if the state row is delayed.');
+assert.match(system,/gmail-action/,'The reconnect control must have its own spacing from status text.');
 assert.match(system,/aktualnie otwarte/);
 assert.match(system,/BŁĄD SYNCHRONIZACJI/);
 assert.match(system,/WYMAGA PONOWNEGO POŁĄCZENIA/);
