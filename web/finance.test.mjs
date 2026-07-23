@@ -8,4 +8,7 @@ assert.match(finance,/visible=\[undated,/);
 assert.match(finance,/'Unknown date'/);
 assert.match(finance,/purchase_count:purchases\.length/);
 assert.match(finance,/Unknown date zbiera sprzedaże i zakupy bez dokładnej daty/);
+assert.match(finance,/const localDate=value=>/);
+assert.match(finance,/return localDate\(new Date\(d\.getFullYear\(\),d\.getMonth\(\),1\)\)/);
+assert.match(finance,/return localDate\(d\)/);
 console.log('Finance unknown-date chart regression checks passed');
