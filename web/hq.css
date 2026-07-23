@@ -136,25 +136,5 @@ dialog::backdrop { background: #24333d88; }
 .toast { position: fixed; right: 22px; bottom: 22px; max-width: 330px; z-index: 10; border: 1px solid var(--ink); background: var(--ink); color: var(--cream); padding: 13px 15px; font-size: 13px; box-shadow: 0 12px 32px #24333d33; }
 .hidden { display: none !important; }
 
-/* Desktop-only optical scale: closer to the operator without touching mobile layout. */
-@media (min-width: 781px) {
-  body { font-size: 16.5px; }
-  main { max-width: 1240px; padding: 38px 42px 80px; }
-  h1 { font-size: clamp(42px, 5.8vw, 78px); }
-  h2 { font-size: 17.5px; }
-  h3 { font-size: 16.5px; }
-  .top { gap: 26px; padding-bottom: 26px; }
-  .card { padding: 20px; }
-  .grid > .card { min-height: 130px; }
-  .metric .n { font-size: clamp(33px, 3.3vw, 50px); }
-  .split { gap: 20px; }
-  .stack { gap: 18px; }
-  .section-title { margin-top: 35px; }
-  nav a, nav button#globalSearch { min-height: 42px; }
-  button, .button { min-height: 42px; padding: 10px 14px 9px; }
-  input, select, textarea { min-height: 44px; padding: 11px; }
-  .toolbar { padding: 12px; }
-}
-
 @media (max-width: 780px) { main { padding: 24px 16px 44px; }.top { display: block; }.top .badge { margin-top: 12px; }.grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }.split, .two-col { grid-template-columns: 1fr; }.hide-small { display: none; }.toolbar { align-items: stretch; flex-direction: column; }.toolbar input, .toolbar select { max-width: none; }.live-grid { grid-template-columns: 1fr; } }
 @media (max-width: 420px) { .grid { grid-template-columns: 1fr; } th, td { padding: 9px 5px; font-size: 12px; } h1 { font-size: 47px; } nav a { width: 100%; } }
