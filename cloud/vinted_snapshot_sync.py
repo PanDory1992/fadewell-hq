@@ -122,8 +122,8 @@ def begin_collector_run():
         headers={**DB_HEADERS, "Content-Type": "application/json"},
         json={
             "p_source": COLLECTOR_SOURCE,
-            "p_stale_after_minutes": 35 if COLLECTOR_MODE == "watchdog" else 0,
-            "p_force": COLLECTOR_MODE == "manual",
+            "p_stale_after_minutes": 70 if COLLECTOR_MODE == "watchdog" else 0,
+            "p_force": COLLECTOR_MODE in ("manual", "degraded"),
         }, timeout=60,
     )
     response.raise_for_status()
