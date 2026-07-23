@@ -60,17 +60,20 @@ Deno.serve(async () => {
   let runId: string | null = null;
   let scanned = 0, received = 0, applied = 0, review = 0, noise = 0;
   try {
+    const runningSince = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    const running = await readJson(await rest(`hq_email_sync_runs?provider=eq.gmail&status=eq.RUNNING&started_at=gt.${encodeURIComponent(runningSince)}&select=id&limit=1`), 'Gmail sync concurrency check');
+    if (running?.[0]) return Response.json({ status: 'already_running' }, { status: 202 });
     await patchSyncState({ last_attempt_at: startedAt, last_error: null });
     runId = await createSyncRun();
     const connection = await readJson(await rest('hq_email_connections?provider=eq.gmail&select=refresh_token'), 'Gmail connection lookup');
     if (!connection?.[0]) throw new Error('Gmail is not connected.');
-    const state = await readJson(await rest('hq_email_sync_state?provider=eq.gmail&select=started_at'), 'Gmail baseline lookup');
+    const state = await readJson(await rest('hq_email_sync_state?provider=eq.gmail&select=started_at,last_success_at'), 'Gmail cursor lookup');
     if (!state?.[0]?.started_at) throw new Error('Gmail baseline is not set.');
     const tokenResponse = await fetch('https://oauth2.googleapis.com/token', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: connection[0].refresh_token, client_id: Deno.env.get('GMAIL_CLIENT_ID')!, client_secret: Deno.env.get('GMAIL_CLIENT_SECRET')! }) });
     const token = await readJson(tokenResponse, 'Gmail token refresh');
     if (!token.access_token) throw new Error('Gmail token refresh returned no access token.');
     const gmail = async (path: string) => readJson(await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/${path}`, { headers: { authorization: `Bearer ${token.access_token}` } }), `Gmail API ${path.split('?')[0]}`);
-    const after = Math.floor(new Date(state[0].started_at).getTime() / 1000);
+    const after = Math.floor(new Date(state[0].last_success_at || state[0].started_at).getTime() / 1000);
     const refs: Array<{ id: string }> = [];
     let pageToken = '';
     do {
