@@ -13,6 +13,14 @@ const headers:Record<string,string>={
   'user-agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
   accept:'application/json, text/plain, */*','accept-language':'pl-PL,pl;q=0.9,en;q=0.7','x-requested-with':'XMLHttpRequest'
 };
+class VintedHttpError extends Error{
+  telemetry:{scope:string;status:number;server:string|null;cf_ray:string|null;request_id:string|null;content_type:string|null};
+  constructor(scope:string,response:Response){
+    super(`Vinted ${scope} HTTP ${response.status}`);
+    this.name='VintedHttpError';
+    this.telemetry={scope,status:response.status,server:response.headers.get('server'),cf_ray:response.headers.get('cf-ray'),request_id:response.headers.get('x-request-id'),content_type:response.headers.get('content-type')};
+  }
+}
 const json=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{'content-type':'application/json'}});
 const amount=(value:unknown)=>{const raw=value&&typeof value==='object'?'amount' in value?(value as Record<string,unknown>).amount:value:value;const number=Number(String(raw??'').replace(',','.'));return Number.isFinite(number)?number:null;};
 const condition=(item:Record<string,unknown>)=>{let value=item.status||item.condition;if(value&&typeof value==='object'){const record=value as Record<string,unknown>;value=record.title||record.name||record.label;}return String(value||'').trim()||null;};
@@ -29,7 +37,7 @@ async function catalogPass(cookie:string){
   let page=1,totalPages=1,totalEntries:number|null=null,anchor=Date.now()/1000;const items:Record<string,unknown>[]=[];
   while(page<=totalPages){
     const url=new URL('https://www.vinted.pl/api/v2/catalog/items');url.searchParams.append('user_ids[]',String(userId));url.searchParams.set('page',String(page));url.searchParams.set('per_page','96');url.searchParams.set('time',String(anchor));url.searchParams.set('order','newest_first');
-    const response=await fetch(url,{headers:{...headers,cookie,referer:'https://www.vinted.pl/','sec-fetch-dest':'empty','sec-fetch-mode':'cors','sec-fetch-site':'same-origin'},signal:AbortSignal.timeout(30000)});if(!response.ok){const body=(await response.text()).replace(/\s+/g,' ').slice(0,160);const names=cookie.split('; ').map(value=>value.split('=')[0]).filter(Boolean);throw new Error(`Vinted catalog HTTP ${response.status}; cookies=${names.join(',')||'none'}; body=${body}`);}
+    const response=await fetch(url,{headers:{...headers,cookie,referer:'https://www.vinted.pl/','sec-fetch-dest':'empty','sec-fetch-mode':'cors','sec-fetch-site':'same-origin'},signal:AbortSignal.timeout(30000)});if(!response.ok)throw new VintedHttpError('catalog',response);
     const payload=await response.json(),batch=(payload.items||[]) as Record<string,unknown>[];
     if(batch.some(item=>Number((item.user as Record<string,unknown>|undefined)?.id)!==userId))throw new Error('Refusing mixed-seller Vinted response');
     const pagination=payload.pagination||{},advertisedPages=Number(pagination.total_pages||page),advertisedEntries=pagination.total_entries===undefined?null:Number(pagination.total_entries);
@@ -42,7 +50,7 @@ async function catalogPass(cookie:string){
 }
 
 async function fetchItemsOnce(){
-  const home=await fetch('https://www.vinted.pl',{headers,signal:AbortSignal.timeout(30000)});if(!home.ok)throw new Error(`Vinted home HTTP ${home.status}`);const cookie=cookieHeader(home);
+  const home=await fetch('https://www.vinted.pl',{headers,signal:AbortSignal.timeout(30000)});if(!home.ok)throw new VintedHttpError('home',home);const cookie=cookieHeader(home);
   const combined=new Map<string,Record<string,unknown>>();let advertisedTotal:number|null=null;const passSizes:number[]=[];
   for(let pass=1;pass<=4;pass++){
     const result=await catalogPass(cookie);for(const [id,item] of result.items)combined.set(id,item);passSizes.push(result.items.size);advertisedTotal=Math.max(advertisedTotal||0,result.totalEntries||0)||null;
@@ -55,7 +63,7 @@ async function fetchItemsOnce(){
 
 function retryableVintedError(error:unknown){
   const message=error instanceof Error?error.message:String(error),name=error instanceof Error?error.name:'';
-  return name==='TimeoutError'||name==='TypeError'||/^Vinted (?:home|catalog) HTTP (?:403|429|5\d\d)\b/.test(message)||/^Partial Vinted pagination/.test(message)||/^Vinted total changed mid-pull/.test(message);
+  return name==='TimeoutError'||name==='TypeError'||/^Vinted (?:home|catalog) HTTP (?:429|5\d\d)\b/.test(message)||/^Partial Vinted pagination/.test(message)||/^Vinted total changed mid-pull/.test(message);
 }
 
 async function fetchItems(){
@@ -100,5 +108,5 @@ Deno.serve(async request=>{
     const active=new Set(live.map(item=>String(item.id))),newListings=live.filter(item=>!seen.has(String(item.id)));await resolveNewListings(newListings,active);
     await db.rpc('finish_hq_collector_run',{p_run_id:runId,p_success:true,p_captured_at:capturedAt,p_item_count:rows.length,p_error:null,p_detail:{catalog_total:result.advertisedTotal,pass_sizes:result.passSizes,new_listings:newListings.length}});
     return json({status:'success',captured_at:capturedAt,item_count:rows.length,new_listings:newListings.length,passes:result.passSizes});
-  }catch(error){const message=error instanceof Error?error.message:String(error);await db.rpc('finish_hq_collector_run',{p_run_id:runId,p_success:false,p_captured_at:null,p_item_count:null,p_error:message,p_detail:{}});return json({status:'failed',error:message},502);}
+  }catch(error){const message=error instanceof Error?error.message:String(error),telemetry=error instanceof VintedHttpError?error.telemetry:null;await db.rpc('finish_hq_collector_run',{p_run_id:runId,p_success:false,p_captured_at:null,p_item_count:null,p_error:message,p_detail:telemetry?{error_class:'VINTED_HTTP',vinted:telemetry}:{}});return json({status:'failed',error:message},502);}
 });

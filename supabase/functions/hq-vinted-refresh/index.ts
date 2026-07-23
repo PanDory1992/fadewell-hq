@@ -1,6 +1,9 @@
+import {createClient} from 'npm:@supabase/supabase-js@2';
+
 const projectUrl = Deno.env.get('SUPABASE_URL')!;
 const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const githubToken = Deno.env.get('GITHUB_WORKFLOW_DISPATCH_TOKEN');
+const db = createClient(projectUrl, serviceKey, { auth: { persistSession: false } });
 const cors = {
   'access-control-allow-origin': 'https://hq.fadewell.eu',
   'access-control-allow-headers': 'authorization, apikey, content-type, x-client-info',
@@ -40,6 +43,21 @@ Deno.serve(async (request) => {
     const run = runs.find((candidate: { created_at: string }) => new Date(candidate.created_at).getTime() >= since);
     if (!run) return reply({ status: 'pending' });
     return reply({ status: run.status, conclusion: run.conclusion, run_url: run.html_url, created_at: run.created_at });
+  }
+
+  const { data: recentManual, error: recentManualError } = await db
+    .from('hq_collector_runs')
+    .select('started_at')
+    .eq('collector_key', 'vinted_live')
+    .eq('source', 'GITHUB_MANUAL')
+    .order('started_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (recentManualError) return reply({ error: 'Could not check the manual refresh cooldown.' }, 502);
+  const lastManualAt = recentManual?.started_at ? new Date(recentManual.started_at).getTime() : 0;
+  const cooldownMs = 10 * 60 * 1000;
+  if (lastManualAt && Date.now() - lastManualAt < cooldownMs) {
+    return reply({ status: 'cooldown', retry_at: new Date(lastManualAt + cooldownMs).toISOString() });
   }
   const activeRun = runs.find((run: { status: string; html_url: string }) => run.status !== 'completed');
   if (activeRun) return reply({ status: 'already_running', run_url: activeRun.html_url, requested_at: activeRun.created_at });

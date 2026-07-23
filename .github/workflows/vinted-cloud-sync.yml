@@ -11,6 +11,7 @@ on:
         options:
           - manual
           - watchdog
+          - degraded
 
 permissions:
   contents: read
@@ -31,13 +32,13 @@ jobs:
       - run: pip install --disable-pip-version-check cloudscraper requests
       - name: Check freshness and run the fallback only when needed
         id: collect
-        continue-on-error: ${{ inputs.mode == 'watchdog' }}
+        continue-on-error: ${{ inputs.mode != 'manual' }}
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           VINTED_USER_ID: '271911480'
           COLLECTOR_MODE: ${{ inputs.mode == 'watchdog' && 'watchdog' || 'manual' }}
-          COLLECTOR_SOURCE: ${{ inputs.mode == 'watchdog' && 'GITHUB_FALLBACK' || 'GITHUB_MANUAL' }}
+          COLLECTOR_SOURCE: ${{ inputs.mode == 'watchdog' && 'GITHUB_FALLBACK' || inputs.mode == 'degraded' && 'GITHUB_DEGRADED' || 'GITHUB_MANUAL' }}
         run: |
           for attempt in 1 2 3; do
             python cloud/vinted_snapshot_sync.py && exit 0
@@ -45,5 +46,5 @@ jobs:
             sleep $((attempt * 30))
           done
       - name: Keep watchdog failure visible without notification spam
-        if: ${{ inputs.mode == 'watchdog' && steps.collect.outcome == 'failure' }}
+        if: ${{ inputs.mode != 'manual' && steps.collect.outcome == 'failure' }}
         run: echo "::warning title=Vinted collector stale::Vinted did not return a complete catalog. No partial snapshot was saved; HQ freshness remains the operational alert."

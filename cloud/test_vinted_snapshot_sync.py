@@ -44,13 +44,20 @@ def item(item_id):
 
 
 class SnapshotPaginationTests(unittest.TestCase):
-    def test_watchdog_uses_35_minute_freshness_gate(self):
+    def test_watchdog_uses_70_minute_freshness_gate(self):
         response = RequestsResponse({"accepted": False, "reason": "fresh"})
         with patch.object(sync, "COLLECTOR_MODE", "watchdog"), patch.object(sync, "COLLECTOR_SOURCE", "GITHUB_FALLBACK"), patch.object(sync.requests, "post", return_value=response) as post:
             result = sync.begin_collector_run()
         self.assertFalse(result["accepted"])
-        self.assertEqual(post.call_args.kwargs["json"]["p_stale_after_minutes"], 35)
+        self.assertEqual(post.call_args.kwargs["json"]["p_stale_after_minutes"], 70)
         self.assertFalse(post.call_args.kwargs["json"]["p_force"])
+
+    def test_degraded_run_bypasses_freshness_but_keeps_the_database_lease(self):
+        response = RequestsResponse({"accepted": True, "run_id": "test"})
+        with patch.object(sync, "COLLECTOR_MODE", "degraded"), patch.object(sync, "COLLECTOR_SOURCE", "GITHUB_DEGRADED"), patch.object(sync.requests, "post", return_value=response) as post:
+            sync.begin_collector_run()
+        self.assertEqual(post.call_args.kwargs["json"]["p_stale_after_minutes"], 0)
+        self.assertTrue(post.call_args.kwargs["json"]["p_force"])
 
     def test_manual_run_forces_freshness_but_still_uses_database_lease(self):
         response = RequestsResponse({"accepted": True, "run_id": "test"})
