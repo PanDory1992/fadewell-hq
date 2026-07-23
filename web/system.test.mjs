@@ -9,6 +9,7 @@ assert.match(system,/Połączenie OAuth jest potwierdzone/);
 assert.match(system,/POŁĄCZONO — TRWA PIERWSZA SYNCHRONIZACJA/);
 assert.match(system,/Odczytaj nowe maile/);
 assert.match(system,/tylko maile nowsze od ostatniej udanej synchronizacji/);
+assert.match(system,/Ostatnie zdarzenie biznesowe z Gmaila/);
 assert.match(system,/aktualnie otwarte/);
 assert.match(system,/BŁĄD SYNCHRONIZACJI/);
 assert.match(system,/WYMAGA PONOWNEGO POŁĄCZENIA/);
