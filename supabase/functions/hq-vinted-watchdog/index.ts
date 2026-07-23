@@ -24,7 +24,7 @@ Deno.serve(async request=>{
   if(!await sameSecret(supplied,sharedSecret))return json({error:'Forbidden'},403);
   if(!githubToken)return json({error:'GitHub watchdog token is not configured'},503);
 
-  const{data:claim,error:claimError}=await db.rpc('claim_hq_vinted_watchdog_dispatch',{p_stale_after_minutes:35,p_cooldown_minutes:10});
+  const{data:claim,error:claimError}=await db.rpc('claim_hq_vinted_watchdog_dispatch',{p_stale_after_minutes:70,p_cooldown_minutes:55});
   if(claimError)return json({error:claimError.message},500);
   if(!claim.accepted)return json({status:'skipped',...claim});
 
@@ -37,7 +37,7 @@ Deno.serve(async request=>{
       'user-agent':'fadewell-vinted-watchdog',
       'x-github-api-version':'2022-11-28'
     },
-    body:JSON.stringify({ref:'main',inputs:{mode:'watchdog'}}),
+    body:JSON.stringify({ref:'main',inputs:{mode:claim.reason==='edge_degraded'?'degraded':'watchdog'}}),
     signal:AbortSignal.timeout(15000)
   }).catch(error=>new Response(String(error),{status:599}));
 
