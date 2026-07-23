@@ -21,6 +21,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html { background: #d8d1c6; }
 body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--ink); font: 15px/1.5 var(--body); -webkit-font-smoothing: antialiased; }
 main { max-width: 1360px; min-height: 100vh; margin: auto; padding: 34px 38px 72px; background: var(--bg); }
