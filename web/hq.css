@@ -70,6 +70,8 @@ button:disabled { cursor: wait; opacity: .6; transform: none; }
 .decision-overview span { font: 600 11px/1.15 var(--label); letter-spacing: .1em; text-transform: uppercase; }
 .decision-lane { scroll-margin-top: 20px; }
 .decision-lane .section-title { margin-top: 28px; }
+.decision-lane.needs-decision { border-left: 3px solid var(--brown); padding-left: 14px; }
+.decision-lane.needs-decision .section-title h2:after { content: "WYMAGA DECYZJI"; display: inline-block; margin-left: 10px; color: var(--brown); font: 600 10px/1 var(--label); letter-spacing: .12em; vertical-align: 2px; }
 .operations-health { margin-top: 40px; padding-top: 2px; border-top: 1px solid var(--line); }
 .section-title { display: flex; justify-content: space-between; align-items: baseline; gap: 14px; margin: 36px 0 12px; padding-bottom: 9px; border-bottom: 1px solid var(--line); }
 .section-title h2:before { content: ""; display: inline-block; width: 24px; height: 2px; margin: 0 9px 4px 0; background: var(--brown); }
@@ -106,6 +108,7 @@ tr:last-child td { border-bottom: 0; }
 .feed { display: grid; gap: 0; border-top: 1px solid var(--line); }
 .feed-item { padding: 13px 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; }
 .feed-item:last-child { border-bottom: 0; }.feed-item p { margin: 5px 0 0; }
+.activity-toggle { margin-top: 14px; align-self: start; }
 .live-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 0; border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
 .live-grid > .card { border-top: 0; border-left: 0; }
 .live-card { display: grid; grid-template-columns: 62px 1fr; gap: 12px; min-height: 118px; }
