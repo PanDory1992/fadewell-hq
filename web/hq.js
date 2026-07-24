@@ -18,13 +18,14 @@ const unpack=data=>({...data,linked:new Map(data.linked||[])});
 const changesSince=async cursor=>{const {data,error}=await sb.rpc('hq_browser_sync_changes_since',{p_after:Number(cursor||0)});if(error)throw error;return data||[]};
 const latestCursor=changes=>changes.length?Number(changes[changes.length-1].id):null;
 
-const pages=[['index.html','Dziś · Home'],['operations.html','Dziś · Operations'],['kpi.html','Pieniądze · KPI'],['finance.html','Pieniądze · Finanse'],['pricing.html','Pieniądze · Pricing'],['ledger.html','Stock · Ledger'],['wardrobe.html','Stock · Live wardrobe'],['triage.html','Stock · Triage'],['item-dna.html','Stock · Item DNA'],['sourcing.html','Stock · Sourcing'],['actions.html','Akcje · Action Studio'],['system.html','System']];
+const pages=[['index.html','Dziś','today'],['operations.html','Sprawy','today'],['kpi.html','KPI','money'],['finance.html','Finanse','money'],['pricing.html','Ceny','money'],['ledger.html','Ledger','stock'],['wardrobe.html','Live wardrobe','stock'],['triage.html','Triage','stock'],['item-dna.html','Item DNA','stock'],['sourcing.html','Sourcing','stock'],['actions.html','Akcje','actions'],['system.html','System','system']];
 
 pages.splice(pages.findIndex(page=>page[0]==='kpi.html'),1);
 
 export async function shell(active){
   if(!document.querySelector('link[href="polish.css"]'))document.head.insertAdjacentHTML('beforeend','<link rel="stylesheet" href="polish.css">');
-  $('nav').innerHTML=pages.map(([href,label])=>`<a class="${href===active?'active':''}" href="${href}">${label}</a>`).join('')+`<button class="secondary" id="globalSearch" title="Ctrl+K">⌕</button>`;
+  $('nav').setAttribute('aria-label','Główna nawigacja HQ');
+  $('nav').innerHTML=pages.map(([href,label,group])=>`<a class="nav-${group} ${href===active?'active':''}" ${href===active?'aria-current="page"':''} href="${href}">${label}</a>`).join('')+`<button class="secondary" id="globalSearch" title="Szukaj w Ledgerze · Ctrl+K" aria-label="Szukaj w Ledgerze">⌕</button>`;
   document.addEventListener('keydown',event=>{if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='k'){event.preventDefault();location.href='ledger.html?focus=search';}});
   $('globalSearch').onclick=()=>location.href='ledger.html?focus=search';
   if(active==='index.html')setTimeout(()=>{const notice=document.querySelector('#kpis .notice'),target=$('openCases');if(notice&&target)target.append(notice)},200);
