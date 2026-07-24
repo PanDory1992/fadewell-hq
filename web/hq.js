@@ -36,12 +36,18 @@ export async function shell(active){
 }
 
 export async function data(){
-  const [{data:ledgerItems,error:ledgerError},{data:legacyItems,error:legacyError},{data:snapshots,error:snapshotsError},{data:reviews,error:reviewsError},{data:events,error:eventsError},{data:gmailEvents,error:gmailError},{data:latestGmailBusinessEvents,error:latestGmailBusinessEventsError},{data:transactionExceptions,error:transactionExceptionsError},{data:qualityReport,error:qualityReportError},{data:collectorHealth,error:collectorHealthError},{data:emailSyncState,error:emailSyncError},{data:emailSyncRuns,error:emailSyncRunsError}]=await Promise.all([
+  const status=$('status');if(status)status.textContent='Wczytuję podstawowe dane HQ…';
+  const [{data:ledgerItems,error:ledgerError},{data:legacyItems,error:legacyError},{data:snapshots,error:snapshotsError},{data:reviews,error:reviewsError},{data:events,error:eventsError}]=await Promise.all([
     sb.from('hq_ledger_items').select('*').order('item_id'),
     sb.from('hq_items').select('*').order('item_id'),
     sb.from('hq_listing_snapshots').select('*').order('captured_at',{ascending:false}).limit(800),
     sb.from('hq_review_queue').select('*').eq('state','OPEN').order('created_at',{ascending:false}),
-    sb.from('hq_ledger_events').select('item_id,event_type,occurred_on,amount,detail,source,created_at,external_key').order('created_at',{ascending:false}).limit(30),
+    sb.from('hq_ledger_events').select('item_id,event_type,occurred_on,amount,detail,source,created_at,external_key').order('created_at',{ascending:false}).limit(30)
+  ]);
+  if(snapshotsError||reviewsError) throw (snapshotsError||reviewsError);
+  if(ledgerError&&legacyError) throw ledgerError;
+  if(status)status.textContent='Dane podstawowe gotowe · dociągam diagnostykę…';
+  const [{data:gmailEvents,error:gmailError},{data:latestGmailBusinessEvents,error:latestGmailBusinessEventsError},{data:transactionExceptions,error:transactionExceptionsError},{data:qualityReport,error:qualityReportError},{data:collectorHealth,error:collectorHealthError},{data:emailSyncState,error:emailSyncError},{data:emailSyncRuns,error:emailSyncRunsError}]=await Promise.all([
     sb.from('hq_external_events').select('source_event_id,event_type,state,occurred_at,item_title,amount,vinted_transaction_id,evidence,created_at').eq('source','GMAIL_VINTED').eq('state','NEEDS_REVIEW').order('created_at',{ascending:false}).limit(1000),
     sb.from('hq_external_events').select('source_event_id,event_type,state,occurred_at,item_title,amount,vinted_transaction_id,matched_item_id,ledger_event_id,created_at').eq('source','GMAIL_VINTED').in('state',['AUTO_APPLIED','MANUAL_RESOLVED']).in('event_type',['SALE_PENDING','SALE_CONFIRMED','PURCHASE_CONFIRMED','PURCHASE_BUNDLE']).order('created_at',{ascending:false}).limit(1),
     sb.from('hq_vinted_operations_exceptions').select('*').order('created_at',{ascending:false}).limit(1000),
@@ -50,8 +56,7 @@ export async function data(){
     sb.from('hq_email_sync_state').select('*').eq('provider','gmail').maybeSingle(),
     sb.from('hq_email_sync_runs').select('*').eq('provider','gmail').order('started_at',{ascending:false}).limit(1)
   ]);
-  if(snapshotsError||reviewsError) throw (snapshotsError||reviewsError);
-  if(ledgerError&&legacyError) throw ledgerError;
+  if(status)status.textContent='Dane HQ gotowe';
   const source=(ledgerItems||[]).length?'ledger':(legacyItems||[]).length?'legacy':'empty';
   const items=source==='ledger'?(ledgerItems||[]):(legacyItems||[]).map(item=>({
     ...item,
