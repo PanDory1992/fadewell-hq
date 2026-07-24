@@ -29,7 +29,7 @@ a { color: inherit; }
 
 .eyebrow { color: var(--brown); font: 600 11px/1 var(--label); letter-spacing: .19em; text-transform: uppercase; }
 .top { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 18px; padding: 4px 0 24px; border-bottom: 1px solid var(--line); }
-h1 { max-width: 16ch; margin: 7px 0 10px; font: 400 clamp(38px, 5.4vw, 72px)/.87 var(--display); letter-spacing: .015em; text-transform: uppercase; }
+h1 { max-width: 16ch; margin: 16px 0 10px; font: 400 clamp(38px, 5.4vw, 72px)/.87 var(--display); letter-spacing: .015em; text-transform: uppercase; }
 h2 { margin: 0 0 10px; font: 500 16px/1.1 var(--label); letter-spacing: .1em; text-transform: uppercase; }
 h3 { margin: 0 0 7px; font: 500 15px/1.2 var(--label); letter-spacing: .045em; }
 p { margin: 8px 0; }
