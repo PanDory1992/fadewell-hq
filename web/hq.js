@@ -15,6 +15,12 @@ const cacheGet=async()=>{try{const db=await cacheOpen();return await new Promise
 const cachePut=async value=>{try{if(JSON.stringify(value).length>1500000)return;const db=await cacheOpen();await new Promise(resolve=>{const request=db.transaction('cache','readwrite').objectStore('cache').put(value,cacheKey);request.onsuccess=request.onerror=resolve})}catch{}};
 const pack=data=>({...data,linked:[...(data.linked||new Map())]});
 const unpack=data=>({...data,linked:new Map(data.linked||[])});
+const syncStamp=async()=>JSON.stringify((await Promise.all([
+  sb.from('hq_collector_control').select('updated_at').eq('collector_key','vinted_live').maybeSingle(),
+  sb.from('hq_ledger_items').select('updated_at').order('updated_at',{ascending:false}).limit(1),
+  sb.from('hq_ledger_events').select('created_at').order('created_at',{ascending:false}).limit(1),
+  sb.from('hq_external_events').select('created_at,processed_at').order('created_at',{ascending:false}).limit(1)
+])).map(result=>result.data||null));
 
 const pages=[['index.html','Dziś · Home'],['operations.html','Dziś · Operations'],['kpi.html','Pieniądze · KPI'],['finance.html','Pieniądze · Finanse'],['pricing.html','Pieniądze · Pricing'],['ledger.html','Stock · Ledger'],['wardrobe.html','Stock · Live wardrobe'],['triage.html','Stock · Triage'],['item-dna.html','Stock · Item DNA'],['sourcing.html','Stock · Sourcing'],['actions.html','Akcje · Action Studio'],['system.html','System']];
 
@@ -104,9 +110,9 @@ async function loadData(){
 }
 
 export async function data(){
-  const cached=await cacheGet(),fresh=loadData();
-  if(cached?.data){$('status').textContent='Pokazuję ostatni zapisany stan · aktualizuję…';fresh.then(async next=>{const data=pack(next);if(JSON.stringify(data)!==JSON.stringify(cached.data)){await cachePut({data,savedAt:Date.now()});document.dispatchEvent(new Event('hq:data-refreshed'))}}).catch(()=>{});return unpack(cached.data);}
-  const next=await fresh;await cachePut({data:pack(next),savedAt:Date.now()});return next;
+  const cached=await cacheGet();
+  if(cached?.data){$('status').textContent='Pokazuję ostatni zapisany stan · sprawdzam zmiany…';const stamp=await syncStamp().catch(()=>null);if(stamp&&stamp===cached.stamp){$('status').textContent='Dane HQ są aktualne';return unpack(cached.data);}loadData().then(async next=>{const data=pack(next);await cachePut({data,stamp:await syncStamp().catch(()=>null),savedAt:Date.now()});if(JSON.stringify(data)!==JSON.stringify(cached.data))document.dispatchEvent(new Event('hq:data-refreshed'))}).catch(()=>{});return unpack(cached.data);}
+  const next=await loadData();await cachePut({data:pack(next),stamp:await syncStamp().catch(()=>null),savedAt:Date.now()});return next;
 }
 
 export const statusClass=status=>status==='SOLD'?'sold':status==='LISTED-BACKLOG'?'listed':'unlisted';
