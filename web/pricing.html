@@ -18,9 +18,11 @@
   <nav id="nav"></nav>
   <div class="row-actions"><button id="login">Zaloguj przez GitHub</button><button id="logout" hidden class="secondary">Wyloguj</button><span id="status" class="muted small"></span></div>
   <section id="app" hidden>
-    <section id="summary" class="grid"></section>
-    <div class="section-title"><div><h2>Kolejka decyzji</h2><p class="muted small">Najpierw największy wpływ i najwyższa pewność. Klik prowadzi do osi prawdy DEN.</p></div><span id="count" class="muted small"></span></div>
-    <div id="rows" class="pricing-grid"></div>
+    <section id="summary" class="grid decision-strip"></section>
+    <section class="decision-layout">
+      <section><div class="section-title"><div><h2>Dzisiejsze decyzje</h2><p class="muted small">Najpierw największy wpływ i najwyższa pewność. Klik prowadzi do osi prawdy DEN.</p></div><span id="count" class="muted small"></span></div><div id="rows" class="pricing-grid"></div></section>
+      <aside id="context" class="card context-card"></aside>
+    </section>
   </section>
 </main>
 <script type="module">
@@ -45,9 +47,12 @@ if(await shell('pricing.html')){
     if(history.error)throw history.error;
     const cockpit=buildCockpit(d.items,history.data||[]);
     const ready=cockpit.rows.filter(row=>row.model.status==='READY').length;
-    const actions=cockpit.rows.filter(row=>['TEST_LOWER','RAISE','PRESENTATION'].includes(row.decision.action)).length;
-    summary.innerHTML=[['Aktywne oferty',cockpit.rows.length],['Z estymatą',ready],['Ruchy do rozważenia',actions],['Kalibracja',cockpit.calibration.status==='CALIBRATED'?`gotowa (${cockpit.calibration.count})`:`zbiera dane (${cockpit.calibration.count})`]].map(([label,value])=>`<article class="card metric"><div class="n">${safe(value)}</div><div class="label">${safe(label)}</div></article>`).join('');
+    const actions=cockpit.rows.filter(row=>['TEST_LOWER','RAISE'].includes(row.decision.action)).length;
+    const presentation=cockpit.rows.filter(row=>row.decision.action==='PRESENTATION').length;
+    summary.innerHTML=[['Do zmiany ceny',actions],['Wymaga decyzji',presentation],['Live listingi',cockpit.rows.length]].map(([label,value])=>`<article class="card metric"><div class="n">${safe(value)}</div><div class="label">${safe(label)}</div></article>`).join('');
     count.textContent=`${cockpit.rows.length} aktywnych listingów`;
+    const snapshot=d.latestCapturedAt?new Date(d.latestCapturedAt).toLocaleString('pl-PL'):'brak danych';
+    context.innerHTML=`<h2>Kontekst dnia</h2><div class="feed"><div class="feed-item"><b>Świeżość snapshotu</b><p class="muted small">${safe(snapshot)}</p></div><div class="feed-item"><b>Priorytetowe kroki</b><p><span class="context-number">1</span> Zmień ceny tylko tam, gdzie HQ daje konkretny następny test.</p><p><span class="context-number">2</span> Sprawdź prezentację, gdy cena nie jest główną barierą.</p><p><span class="context-number">3</span> Zapisz decyzję — Vinted zmieniasz świadomie poza HQ.</p></div><div class="feed-item"><b>Kalibracja</b><p class="muted small">${safe(cockpit.calibration.status==='CALIBRATED'?`Gotowa · ${cockpit.calibration.count} obserwacji`:`Zbiera dane · ${cockpit.calibration.count} obserwacji`)}</p></div></div>`;
     rows.innerHTML=cockpit.rows.map(card).join('')||'<article class="card empty">Brak aktywnych ofert powiązanych z DEN.</article>';rows.querySelectorAll('button[data-price-test]').forEach(button=>button.onclick=async()=>{button.disabled=true;const{error}=await sb.rpc('record_hq_price_test_owner',{p:{item_id:button.dataset.priceTest,price:button.dataset.price,external_key:crypto.randomUUID()}});if(error){button.disabled=false;button.textContent='Nie zapisano';return}button.textContent='Test zapisany'});
   }catch(error){app.innerHTML=`<div class="notice">Nie udało się wczytać Pricing: ${safe(error.message||error)}</div>`;}
 }
