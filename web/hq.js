@@ -12,7 +12,7 @@ export const toast=message=>{const el=document.createElement('div');el.className
 const cacheKey='fadewell-hq-data-v1';
 const cacheOpen=()=>new Promise((resolve,reject)=>{const request=indexedDB.open('fadewell-hq',1);request.onupgradeneeded=()=>request.result.createObjectStore('cache');request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)});
 const cacheGet=async()=>{try{const db=await cacheOpen();return await new Promise(resolve=>{const request=db.transaction('cache').objectStore('cache').get(cacheKey);request.onsuccess=()=>resolve(request.result||null);request.onerror=()=>resolve(null)})}catch{return null}};
-const cachePut=async value=>{try{const db=await cacheOpen();await new Promise(resolve=>{const request=db.transaction('cache','readwrite').objectStore('cache').put(value,cacheKey);request.onsuccess=request.onerror=resolve})}catch{}};
+const cachePut=async value=>{try{if(JSON.stringify(value).length>1500000)return;const db=await cacheOpen();await new Promise(resolve=>{const request=db.transaction('cache','readwrite').objectStore('cache').put(value,cacheKey);request.onsuccess=request.onerror=resolve})}catch{}};
 const pack=data=>({...data,linked:[...(data.linked||new Map())]});
 const unpack=data=>({...data,linked:new Map(data.linked||[])});
 
