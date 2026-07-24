@@ -9,6 +9,12 @@ export const money=value=>value===null||value===undefined||value===''?'—':new 
 export const date=value=>value?new Intl.DateTimeFormat('pl-PL',{dateStyle:'medium'}).format(new Date(value)): '—';
 export const pendingExternalReviews=events=>(events||[]).filter(event=>event.state==='NEEDS_REVIEW');
 export const toast=message=>{const el=document.createElement('div');el.className='toast';el.textContent=message;document.body.append(el);setTimeout(()=>el.remove(),2600)};
+const cacheKey='fadewell-hq-data-v1';
+const cacheOpen=()=>new Promise((resolve,reject)=>{const request=indexedDB.open('fadewell-hq',1);request.onupgradeneeded=()=>request.result.createObjectStore('cache');request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)});
+const cacheGet=async()=>{try{const db=await cacheOpen();return await new Promise(resolve=>{const request=db.transaction('cache').objectStore('cache').get(cacheKey);request.onsuccess=()=>resolve(request.result||null);request.onerror=()=>resolve(null)})}catch{return null}};
+const cachePut=async value=>{try{const db=await cacheOpen();await new Promise(resolve=>{const request=db.transaction('cache','readwrite').objectStore('cache').put(value,cacheKey);request.onsuccess=request.onerror=resolve})}catch{}};
+const pack=data=>({...data,linked:[...(data.linked||new Map())]});
+const unpack=data=>({...data,linked:new Map(data.linked||[])});
 
 const pages=[['index.html','Dziś · Home'],['operations.html','Dziś · Operations'],['kpi.html','Pieniądze · KPI'],['finance.html','Pieniądze · Finanse'],['pricing.html','Pieniądze · Pricing'],['ledger.html','Stock · Ledger'],['wardrobe.html','Stock · Live wardrobe'],['triage.html','Stock · Triage'],['item-dna.html','Stock · Item DNA'],['sourcing.html','Stock · Sourcing'],['actions.html','Akcje · Action Studio'],['system.html','System']];
 
@@ -26,16 +32,17 @@ export async function shell(active){
     const {error}=await sb.auth.signInWithOAuth({provider:'github',options:{redirectTo:location.origin+location.pathname}});
     if(error) $('status').textContent=`Logowanie: ${error.message}`;
   };
-  $('logout').onclick=async()=>{await sb.auth.signOut(); location.reload();};
+  $('logout').onclick=async()=>{indexedDB.deleteDatabase('fadewell-hq');await sb.auth.signOut(); location.reload();};
   const {data:{session}}=await sb.auth.getSession();
   if(!session){$('status').textContent='Zaloguj się przez GitHub, aby otworzyć prywatny prototyp HQ.';return false;}
   const {data:owner,error}=await sb.rpc('claim_first_hq_owner');
   if(error||!owner){$('status').textContent=error?.message||'To konto nie ma dostępu ownera.';return false;}
   $('login').hidden=true;$('logout').hidden=false;$('status').textContent=session.user.email||'HQ owner';
+  document.addEventListener('hq:data-refreshed',()=>{const status=$('status');if(status)status.textContent='Dane HQ zaktualizowane';if(active==='index.html'&&!sessionStorage.getItem('hq-home-refreshed')){sessionStorage.setItem('hq-home-refreshed','1');setTimeout(()=>location.reload(),250)}},{once:true});
   return true;
 }
 
-export async function data(){
+async function loadData(){
   const status=$('status');if(status)status.textContent='Wczytuję podstawowe dane HQ…';
   const [{data:ledgerItems,error:ledgerError},{data:legacyItems,error:legacyError},{data:snapshots,error:snapshotsError},{data:reviews,error:reviewsError},{data:events,error:eventsError}]=await Promise.all([
     sb.from('hq_ledger_items').select('*').order('item_id'),
@@ -94,6 +101,12 @@ export async function data(){
   const missing=previousCapturedAt?items.filter(item=>item.ledger_status==='LISTED-BACKLOG'&&item.vinted_item_id&&!latestIds.has(String(item.vinted_item_id))&&!previousIds.has(String(item.vinted_item_id))):[];
   const pendingGmailReviews=gmailEvents||[];
   return {items,snapshots:live,reviews:reviews||[],events:events||[],eventsError,gmailEvents:pendingGmailReviews,gmailError,latestGmailBusinessEvent:(latestGmailBusinessEvents||[])[0]||null,latestGmailBusinessEventsError,transactionExceptions:transactionExceptions||[],transactionExceptionsError,qualityReport:(qualityReport||[])[0]||null,qualityReportError,collectorHealth:collectorHealth||null,collectorHealthError,emailSyncState:emailSyncState||null,emailSyncError,emailSyncRun:(emailSyncRuns||[])[0]||null,emailSyncRunsError,pendingGmailReviews,source,linked,missing,latestCapturedAt,previousCapturedAt,pendingConfirmation};
+}
+
+export async function data(){
+  const cached=await cacheGet(),fresh=loadData();
+  if(cached?.data){$('status').textContent='Pokazuję ostatni zapisany stan · aktualizuję…';fresh.then(async next=>{const data=pack(next);if(JSON.stringify(data)!==JSON.stringify(cached.data)){await cachePut({data,savedAt:Date.now()});document.dispatchEvent(new Event('hq:data-refreshed'))}}).catch(()=>{});return unpack(cached.data);}
+  const next=await fresh;await cachePut({data:pack(next),savedAt:Date.now()});return next;
 }
 
 export const statusClass=status=>status==='SOLD'?'sold':status==='LISTED-BACKLOG'?'listed':'unlisted';
