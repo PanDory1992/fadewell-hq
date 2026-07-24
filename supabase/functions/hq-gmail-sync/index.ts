@@ -1,6 +1,13 @@
 const url = Deno.env.get('SUPABASE_URL')!;
 const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const headers = { apikey: key, authorization: `Bearer ${key}`, 'content-type': 'application/json' };
+const cors = {
+  'access-control-allow-origin': 'https://hq.fadewell.eu',
+  'access-control-allow-headers': 'authorization, apikey, content-type, x-client-info',
+  'access-control-allow-methods': 'POST, OPTIONS',
+  'content-type': 'application/json'
+};
+const reply = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: cors });
 import { VINTED_PARSER_VERSION, nonEmptyLines, parseVintedMail } from './vinted-parser.mjs';
 
 const PARSER_VERSION = VINTED_PARSER_VERSION;
@@ -55,14 +62,16 @@ const finishSyncRun = async (id: string | null, payload: Record<string, unknown>
   if (!response.ok) console.error('Could not finish Gmail sync run', await response.text());
 };
 
-Deno.serve(async () => {
+Deno.serve(async (request) => {
+  if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
+  if (request.method !== 'POST') return reply({ error: 'Method not allowed.' }, 405);
   const startedAt = new Date().toISOString();
   let runId: string | null = null;
   let scanned = 0, received = 0, applied = 0, review = 0, noise = 0;
   try {
     const runningSince = new Date(Date.now() - 10 * 60 * 1000).toISOString();
     const running = await readJson(await rest(`hq_email_sync_runs?provider=eq.gmail&status=eq.RUNNING&started_at=gt.${encodeURIComponent(runningSince)}&select=id&limit=1`), 'Gmail sync concurrency check');
-    if (running?.[0]) return Response.json({ status: 'already_running' }, { status: 202 });
+    if (running?.[0]) return reply({ status: 'already_running' }, 202);
     await patchSyncState({ last_attempt_at: startedAt, last_error: null });
     runId = await createSyncRun();
     const connection = await readJson(await rest('hq_email_connections?provider=eq.gmail&select=refresh_token'), 'Gmail connection lookup');
@@ -121,13 +130,13 @@ Deno.serve(async () => {
     const finishedAt = new Date().toISOString();
     await patchSyncState({ last_success_at: finishedAt, last_finished_at: finishedAt, last_error: null, last_scanned_count: scanned, last_received_count: received, last_applied_count: applied, last_review_count: review, last_noise_count: noise });
     await finishSyncRun(runId, { status: 'SUCCEEDED', finished_at: finishedAt, scanned_count: scanned, received_count: received, applied_count: applied, review_count: review, noise_count: noise, error: null });
-    return Response.json({ scanned, received, applied, review, noise });
+    return reply({ scanned, received, applied, review, noise });
   } catch (error) {
     const finishedAt = new Date().toISOString();
     const message = String(error instanceof Error ? error.message : error).slice(0, 2000);
     console.error('Gmail sync failed', message);
     try { await patchSyncState({ last_finished_at: finishedAt, last_error: message, last_scanned_count: scanned, last_received_count: received, last_applied_count: applied, last_review_count: review, last_noise_count: noise }); } catch (healthError) { console.error('Could not record Gmail sync failure', String(healthError)); }
     await finishSyncRun(runId, { status: 'FAILED', finished_at: finishedAt, scanned_count: scanned, received_count: received, applied_count: applied, review_count: review, noise_count: noise, error: message });
-    return Response.json({ error: message, scanned, received, applied, review, noise }, { status: 500 });
+    return reply({ error: message, scanned, received, applied, review, noise }, 500);
   }
 });
