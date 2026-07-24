@@ -38,7 +38,7 @@ export async function shell(active){
     const {error}=await sb.auth.signInWithOAuth({provider:'github',options:{redirectTo:location.origin+location.pathname}});
     if(error) $('status').textContent=`Logowanie: ${error.message}`;
   };
-  $('logout').onclick=async()=>{indexedDB.deleteDatabase('fadewell-hq');await sb.auth.signOut(); location.reload();};
+  $('logout').onclick=async()=>{await sb.auth.signOut(); location.reload();};
   const {data:{session}}=await sb.auth.getSession();
   if(!session){$('status').textContent='Zaloguj się przez GitHub, aby otworzyć prywatny prototyp HQ.';return false;}
   const {data:owner,error}=await sb.rpc('claim_first_hq_owner');
