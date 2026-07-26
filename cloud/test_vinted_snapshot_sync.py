@@ -128,6 +128,12 @@ class SnapshotPaginationTests(unittest.TestCase):
         listings = [{"id": "9494323317"}, {"id": "9405604352"}]
         self.assertEqual(sync.unresolved_live_listings(listings, {"9405604352"}), [{"id": "9494323317"}])
 
+    def test_live_metadata_refresh_uses_service_rpc(self):
+        response = SimpleNamespace(raise_for_status=lambda: None, json=lambda: 1)
+        with patch.object(sync.requests, "post", return_value=response) as post:
+            sync.sync_live_listing_metadata([{"vinted_item_id": "8761980027", "title": "Wrangler", "price_pln": 129, "photo_url": "https://photo"}])
+        self.assertIn("sync_hq_live_listing_metadata", post.call_args.args[0])
+
 
 if __name__ == "__main__":
     unittest.main()
