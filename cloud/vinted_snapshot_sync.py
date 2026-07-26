@@ -149,6 +149,19 @@ def eligible_relist_items(active_vinted_ids):
     response.raise_for_status()
     return [item for item in response.json() if str(item["vinted_item_id"]) not in active_vinted_ids]
 
+def linked_listing_ids():
+    response = requests.get(f"{SUPABASE_URL}/rest/v1/hq_ledger_items", headers={"apikey": SERVICE_KEY, "Authorization": f"Bearer {SERVICE_KEY}"}, params={"select":"vinted_item_id", "ledger_status":"eq.LISTED-BACKLOG", "vinted_item_id":"not.is.null", "limit":"1000"}, timeout=60)
+    response.raise_for_status()
+    return {str(item["vinted_item_id"]) for item in response.json()}
+
+def unresolved_live_listings(live_items, linked_ids):
+    """Retry a safe relist match until an active listing is actually linked.
+
+    A deployment or temporary resolver miss must not turn a real relist into a
+    permanent manual task merely because its first observation is now history.
+    """
+    return [listing for listing in live_items if str(listing["id"]) not in linked_ids]
+
 def fetch_new_listing_description(vinted_id):
     """Read public item-page metadata only for a just-discovered listing."""
     # The catalog snapshot is still useful when an individual item page is
@@ -195,12 +208,13 @@ def main():
         active_vinted_ids = {str(listing["id"]) for listing in live_items}
         candidates = eligible_unlisted_items() + eligible_relist_items(active_vinted_ids)
         new_listings = [listing for listing in live_items if str(listing["id"]) not in seen_before]
+        resolver_listings = unresolved_live_listings(live_items, linked_listing_ids())
         description_limit = 5
         for listing in new_listings[:description_limit]:
             listing["description"] = fetch_new_listing_description(listing["id"])
         if len(new_listings) > description_limit:
             print(f"{len(new_listings) - description_limit} new listings were not page-read this cycle; title-only matching remains manual-review only.")
-        for listing in new_listings:
+        for listing in resolver_listings:
             match = best_match(listing, candidates)
             if match and match["auto"]:
                 auto_link(match, listing)
