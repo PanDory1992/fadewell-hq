@@ -145,7 +145,7 @@ def eligible_unlisted_items():
     return response.json()
 
 def eligible_relist_items(active_vinted_ids):
-    response = requests.get(f"{SUPABASE_URL}/rest/v1/hq_ledger_items", headers={"apikey": SERVICE_KEY, "Authorization": f"Bearer {SERVICE_KEY}"}, params={"select":"item_id,name,category,advantage,estimate_sale_price,vinted_item_id", "ledger_status":"eq.LISTED-BACKLOG", "vinted_item_id":"not.is.null", "limit":"1000"}, timeout=60)
+    response = requests.get(f"{SUPABASE_URL}/rest/v1/hq_ledger_items", headers={"apikey": SERVICE_KEY, "Authorization": f"Bearer {SERVICE_KEY}"}, params={"select":"item_id,name,category,advantage,estimate_sale_price,vinted_item_id,live_title", "ledger_status":"eq.LISTED-BACKLOG", "vinted_item_id":"not.is.null", "limit":"1000"}, timeout=60)
     response.raise_for_status()
     return [item for item in response.json() if str(item["vinted_item_id"]) not in active_vinted_ids]
 
