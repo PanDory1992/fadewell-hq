@@ -108,6 +108,14 @@ async function loadData(){
 
 export async function data(){
   const cached=await cacheGet();
+  if(cached?.data){
+    const changes=await changesSince(cached.cursor).catch(()=>null);
+    if(changes?.length){
+      const next=await loadData();
+      await cachePut({data:pack(next),cursor:latestCursor(changes)||cached.cursor||0,savedAt:Date.now()});
+      return next;
+    }
+  }
   if(cached?.data){$('status').textContent='Pokazuję ostatni zapisany stan · sprawdzam zmiany…';const changes=await changesSince(cached.cursor).catch(()=>null);if(changes&&changes.length===0){$('status').textContent='Dane HQ są aktualne';return unpack(cached.data);}loadData().then(async next=>{const data=pack(next),freshChanges=await changesSince(cached.cursor).catch(()=>[]);await cachePut({data,cursor:latestCursor(freshChanges)||cached.cursor||0,savedAt:Date.now()});if(JSON.stringify(data)!==JSON.stringify(cached.data))document.dispatchEvent(new Event('hq:data-refreshed'))}).catch(()=>{});return unpack(cached.data);}
   const next=await loadData(),changes=await changesSince(0).catch(()=>[]);await cachePut({data:pack(next),cursor:latestCursor(changes)||0,savedAt:Date.now()});return next;
 }
