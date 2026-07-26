@@ -37,6 +37,14 @@ class ListingResolverTests(unittest.TestCase):
         self.assertTrue(result["auto"])
         self.assertEqual(result["item"]["item_id"], "DEN-219")
 
+    def test_unique_relist_uses_the_previous_live_title(self):
+        listing = {"title": "Levi's 512 Slim Tapered Jeans Optic White W26 L26 US 7MED Vintage 1996 Made in USA", "price_pln": 129}
+        relisted = item("DEN-141", "Spodnie", 129)
+        relisted.update({"vinted_item_id": "9279738596", "live_title": "Levi's 512 Slim Tapered Jeans Optic White W26 L26 US 7MED Vintage Made in USA"})
+        result = best_match(listing, [relisted])
+        self.assertTrue(result["auto"])
+        self.assertEqual(result["item"]["item_id"], "DEN-141")
+
     def test_marker_normalizes_den_identifier(self):
         self.assertEqual(marker("Proof #DEN-00123"), "DEN-123")
 
