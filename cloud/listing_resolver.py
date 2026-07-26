@@ -59,7 +59,7 @@ def marker(value: Any) -> str | None:
 
 def score(listing: dict[str, Any], item: dict[str, Any]) -> dict[str, Any]:
     listing_text = f"{listing.get('title', '')} {listing.get('description', '')}"
-    item_text = f"{item.get('name', '')} {item.get('category', '')} {item.get('advantage', '')}"
+    item_text = f"{item.get('name', '')} {item.get('live_title', '')} {item.get('category', '')} {item.get('advantage', '')}"
     direct = marker(listing_text)
     if direct and direct == item.get("item_id"):
         return {"item": item, "score": 1000, "reasons": ["marker #den"]}
