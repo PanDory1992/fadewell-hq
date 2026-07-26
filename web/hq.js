@@ -9,7 +9,7 @@ export const money=value=>value===null||value===undefined||value===''?'—':new 
 export const date=value=>value?new Intl.DateTimeFormat('pl-PL',{dateStyle:'medium'}).format(new Date(value)): '—';
 export const pendingExternalReviews=events=>(events||[]).filter(event=>event.state==='NEEDS_REVIEW');
 export const toast=message=>{const el=document.createElement('div');el.className='toast';el.textContent=message;document.body.append(el);setTimeout(()=>el.remove(),2600)};
-const cacheKey='fadewell-hq-data-v1';
+const cacheKey='fadewell-hq-data-v2';
 const cacheOpen=()=>new Promise((resolve,reject)=>{const request=indexedDB.open('fadewell-hq',1);request.onupgradeneeded=()=>request.result.createObjectStore('cache');request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)});
 const cacheGet=async()=>{try{const db=await cacheOpen();return await new Promise(resolve=>{const request=db.transaction('cache').objectStore('cache').get(cacheKey);request.onsuccess=()=>resolve(request.result||null);request.onerror=()=>resolve(null)})}catch{return null}};
 const cachePut=async value=>{try{if(JSON.stringify(value).length>1500000)return;const db=await cacheOpen();await new Promise(resolve=>{const request=db.transaction('cache','readwrite').objectStore('cache').put(value,cacheKey);request.onsuccess=request.onerror=resolve})}catch{}};
@@ -117,7 +117,7 @@ export async function data(){
     }
   }
   if(cached?.data){$('status').textContent='Pokazuję ostatni zapisany stan · sprawdzam zmiany…';const changes=await changesSince(cached.cursor).catch(()=>null);if(changes&&changes.length===0){$('status').textContent='Dane HQ są aktualne';return unpack(cached.data);}loadData().then(async next=>{const data=pack(next),freshChanges=await changesSince(cached.cursor).catch(()=>[]);await cachePut({data,cursor:latestCursor(freshChanges)||cached.cursor||0,savedAt:Date.now()});if(JSON.stringify(data)!==JSON.stringify(cached.data))document.dispatchEvent(new Event('hq:data-refreshed'))}).catch(()=>{});return unpack(cached.data);}
-  const next=await loadData(),changes=await changesSince(0).catch(()=>[]);await cachePut({data:pack(next),cursor:latestCursor(changes)||0,savedAt:Date.now()});return next;
+  const changes=await changesSince(0).catch(()=>[]),next=await loadData();await cachePut({data:pack(next),cursor:latestCursor(changes)||0,savedAt:Date.now()});return next;
 }
 
 export const statusClass=status=>status==='SOLD'?'sold':status==='LISTED-BACKLOG'?'listed':'unlisted';
