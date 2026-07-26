@@ -115,6 +115,10 @@ class SnapshotPaginationTests(unittest.TestCase):
         self.assertEqual(payload["p"]["item_id"], "DEN-064")
         self.assertTrue(payload["p"]["relist"])
 
+    def test_unresolved_listing_is_rechecked_after_its_first_snapshot(self):
+        listings = [{"id": "9494323317"}, {"id": "9405604352"}]
+        self.assertEqual(sync.unresolved_live_listings(listings, {"9405604352"}), [{"id": "9494323317"}])
+
 
 if __name__ == "__main__":
     unittest.main()
