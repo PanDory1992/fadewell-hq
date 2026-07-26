@@ -134,6 +134,11 @@ class SnapshotPaginationTests(unittest.TestCase):
             sync.sync_live_listing_metadata([{"vinted_item_id": "8761980027", "title": "Wrangler", "price_pln": 129, "photo_url": "https://photo"}])
         self.assertIn("sync_hq_live_listing_metadata", post.call_args.args[0])
 
+    def test_known_den_listing_ids_combines_current_and_lineage(self):
+        responses = [RequestsResponse([{"vinted_item_id": "1"}]), RequestsResponse([{"vinted_item_id": "2"}])]
+        with patch.object(sync.requests, "get", side_effect=responses):
+            self.assertEqual(sync.known_den_listing_ids(), {"1", "2"})
+
 
 if __name__ == "__main__":
     unittest.main()
