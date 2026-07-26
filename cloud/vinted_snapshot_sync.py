@@ -213,10 +213,12 @@ def main():
         return
     run_id = lease["run_id"]
     try:
-        excluded = set(SCOPE["excluded_live_vinted_ids"]); captured_at = datetime.now(timezone.utc).isoformat(); rows = []; live_items = []
+        excluded = set(SCOPE["excluded_live_vinted_ids"]); captured_at = datetime.now(timezone.utc).isoformat(); rows = []; live_items = []; excluded_active = []
         for item in fetch_items():
             item_id = str(item["id"])
-            if item_id in excluded: continue
+            if item_id in excluded:
+                excluded_active.append({"vinted_item_id": item_id, "title": item.get("title") or None, "reason": "manual scope exclusion"})
+                continue
             live_items.append(item)
             photo = item.get("photo") or {}; high = photo.get("high_resolution") or {}
             rows.append({"vinted_item_id": item_id, "captured_at": captured_at, "title": item.get("title"), "price_pln": amount(item.get("price")), "views": item.get("view_count") or 0, "favourites": item.get("favourite_count") or 0, "visible": bool(item.get("is_visible", True)), "photo_url": high.get("url") or photo.get("url"), "condition_label": condition_label(item), "source": "github_actions_vinted"})
@@ -244,7 +246,7 @@ def main():
                 candidates = [item for item in candidates if item["item_id"] != match["item"]["item_id"]]
             elif match:
                 print(f"Suggestion only {listing['id']} -> {match['item']['item_id']} ({match['confidence']} {match['score']})")
-        finish_collector_run(run_id, True, captured_at, len(rows), detail={"new_listings": len(new_listings)})
+        finish_collector_run(run_id, True, captured_at, len(rows), detail={"new_listings": len(new_listings), "excluded_active_listings": excluded_active})
     except Exception as error:
         try: finish_collector_run(run_id, False, error=str(error))
         except Exception as finish_error: print(f"Could not record collector failure: {finish_error}")
