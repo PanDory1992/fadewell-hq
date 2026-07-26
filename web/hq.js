@@ -58,14 +58,15 @@ async function loadData(){
   if(snapshotsError||reviewsError) throw (snapshotsError||reviewsError);
   if(ledgerError&&legacyError) throw ledgerError;
   if(status)status.textContent='Dane podstawowe gotowe · dociągam diagnostykę…';
-  const [{data:gmailEvents,error:gmailError},{data:latestGmailBusinessEvents,error:latestGmailBusinessEventsError},{data:transactionExceptions,error:transactionExceptionsError},{data:qualityReport,error:qualityReportError},{data:collectorHealth,error:collectorHealthError},{data:emailSyncState,error:emailSyncError},{data:emailSyncRuns,error:emailSyncRunsError}]=await Promise.all([
+  const [{data:gmailEvents,error:gmailError},{data:latestGmailBusinessEvents,error:latestGmailBusinessEventsError},{data:transactionExceptions,error:transactionExceptionsError},{data:qualityReport,error:qualityReportError},{data:collectorHealth,error:collectorHealthError},{data:emailSyncState,error:emailSyncError},{data:emailSyncRuns,error:emailSyncRunsError},{data:collectorRuns,error:collectorRunsError}]=await Promise.all([
     sb.from('hq_external_events').select('source_event_id,event_type,state,occurred_at,item_title,amount,vinted_transaction_id,evidence,created_at').eq('source','GMAIL_VINTED').eq('state','NEEDS_REVIEW').order('created_at',{ascending:false}).limit(1000),
     sb.from('hq_external_events').select('source_event_id,event_type,state,occurred_at,item_title,amount,vinted_transaction_id,matched_item_id,ledger_event_id,created_at').eq('source','GMAIL_VINTED').in('state',['AUTO_APPLIED','MANUAL_RESOLVED']).in('event_type',['SALE_PENDING','SALE_CONFIRMED','PURCHASE_CONFIRMED','PURCHASE_BUNDLE']).order('created_at',{ascending:false}).limit(1),
     sb.from('hq_vinted_operations_exceptions').select('*').order('created_at',{ascending:false}).limit(1000),
     sb.from('hq_vinted_daily_quality_reports').select('report_date,report,created_at').order('report_date',{ascending:false}).limit(1),
     sb.from('hq_collector_control').select('*').eq('collector_key','vinted_live').maybeSingle(),
     sb.from('hq_email_sync_state').select('*').eq('provider','gmail').maybeSingle(),
-    sb.from('hq_email_sync_runs').select('*').eq('provider','gmail').order('started_at',{ascending:false}).limit(1)
+    sb.from('hq_email_sync_runs').select('*').eq('provider','gmail').order('started_at',{ascending:false}).limit(1),
+    sb.from('hq_collector_runs').select('started_at,completed_at,detail,source,status').eq('collector_key','vinted_live').order('started_at',{ascending:false}).limit(1)
   ]);
   if(status)status.textContent='Dane HQ gotowe';
   const source=(ledgerItems||[]).length?'ledger':(legacyItems||[]).length?'legacy':'empty';
@@ -104,7 +105,7 @@ async function loadData(){
   const live=[...liveById.values()].filter(snapshot=>linked.get(String(snapshot.vinted_item_id))?.ledger_status!=='SOLD');
   const missing=previousCapturedAt?items.filter(item=>item.ledger_status==='LISTED-BACKLOG'&&item.vinted_item_id&&!latestIds.has(String(item.vinted_item_id))&&!previousIds.has(String(item.vinted_item_id))):[];
   const pendingGmailReviews=gmailEvents||[];
-  return {items,snapshots:live,reviews:reviews||[],events:events||[],eventsError,gmailEvents:pendingGmailReviews,gmailError,latestGmailBusinessEvent:(latestGmailBusinessEvents||[])[0]||null,latestGmailBusinessEventsError,transactionExceptions:transactionExceptions||[],transactionExceptionsError,qualityReport:(qualityReport||[])[0]||null,qualityReportError,collectorHealth:collectorHealth||null,collectorHealthError,emailSyncState:emailSyncState||null,emailSyncError,emailSyncRun:(emailSyncRuns||[])[0]||null,emailSyncRunsError,pendingGmailReviews,source,linked,missing,latestCapturedAt,previousCapturedAt,pendingConfirmation};
+  return {items,snapshots:live,reviews:reviews||[],events:events||[],eventsError,gmailEvents:pendingGmailReviews,gmailError,latestGmailBusinessEvent:(latestGmailBusinessEvents||[])[0]||null,latestGmailBusinessEventsError,transactionExceptions:transactionExceptions||[],transactionExceptionsError,qualityReport:(qualityReport||[])[0]||null,qualityReportError,collectorHealth:collectorHealth||null,collectorHealthError,emailSyncState:emailSyncState||null,emailSyncError,emailSyncRun:(emailSyncRuns||[])[0]||null,emailSyncRunsError,collectorRun:(collectorRuns||[])[0]||null,pendingGmailReviews,source,linked,missing,latestCapturedAt,previousCapturedAt,pendingConfirmation};
 }
 
 export async function data(){
