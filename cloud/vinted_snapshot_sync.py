@@ -155,6 +155,15 @@ def linked_listing_ids():
     response.raise_for_status()
     return {str(item["vinted_item_id"]) for item in response.json()}
 
+def known_den_listing_ids():
+    """Current and historical listing IDs that belong to a DEN identity."""
+    ids = set()
+    for table in ("hq_ledger_items", "hq_vinted_listing_lineage"):
+        response = requests.get(f"{SUPABASE_URL}/rest/v1/{table}", headers=DB_HEADERS, params={"select": "vinted_item_id", "vinted_item_id": "not.is.null", "limit": "1000"}, timeout=60)
+        response.raise_for_status()
+        ids.update(str(row["vinted_item_id"]) for row in response.json())
+    return ids
+
 def unresolved_live_listings(live_items, linked_ids):
     """Retry a safe relist match until an active listing is actually linked.
 
@@ -213,7 +222,7 @@ def main():
         return
     run_id = lease["run_id"]
     try:
-        excluded = set(SCOPE["excluded_live_vinted_ids"]); captured_at = datetime.now(timezone.utc).isoformat(); rows = []; live_items = []; excluded_active = []
+        excluded = set(SCOPE["excluded_live_vinted_ids"]); known_den_ids = known_den_listing_ids(); captured_at = datetime.now(timezone.utc).isoformat(); rows = []; live_items = []; excluded_active = []
         for item in fetch_items():
             item_id = str(item["id"])
             if item_id in excluded:
@@ -246,7 +255,7 @@ def main():
                 candidates = [item for item in candidates if item["item_id"] != match["item"]["item_id"]]
             elif match:
                 print(f"Suggestion only {listing['id']} -> {match['item']['item_id']} ({match['confidence']} {match['score']})")
-        finish_collector_run(run_id, True, captured_at, len(rows), detail={"new_listings": len(new_listings), "excluded_active_listings": excluded_active})
+        finish_collector_run(run_id, True, captured_at, len(rows), detail={"new_listings": len(new_listings), "excluded_active_listings": excluded_active, "excluded_den_listings": [listing for listing in excluded_active if listing["vinted_item_id"] in known_den_ids]})
     except Exception as error:
         try: finish_collector_run(run_id, False, error=str(error))
         except Exception as finish_error: print(f"Could not record collector failure: {finish_error}")
