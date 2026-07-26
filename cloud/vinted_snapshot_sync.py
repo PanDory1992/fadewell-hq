@@ -199,6 +199,12 @@ def auto_link(match, listing):
     response.raise_for_status()
     print(f"Auto-linked {vinted_id} -> {item['item_id']} ({match['score']}: {', '.join(match['reasons'])})")
 
+def sync_live_listing_metadata(rows):
+    """Refresh visible Vinted metadata without touching DEN identity or finances."""
+    response = requests.post(f"{SUPABASE_URL}/rest/v1/rpc/sync_hq_live_listing_metadata", headers={"apikey": SERVICE_KEY, "Authorization": f"Bearer {SERVICE_KEY}", "Content-Type": "application/json"}, json={"p": rows}, timeout=60)
+    response.raise_for_status()
+    print(f"Refreshed metadata for {response.json()} current live listing(s)")
+
 def main():
     global ACTIVE_VINTED_IDS
     lease = begin_collector_run()
@@ -220,6 +226,7 @@ def main():
         seen_before = prior_snapshot_ids([str(item["id"]) for item in live_items])
         response = requests.post(f"{SUPABASE_URL}/rest/v1/hq_listing_snapshots?on_conflict=vinted_item_id,captured_at", headers={**DB_HEADERS, "Content-Type": "application/json", "Prefer": "resolution=merge-duplicates,return=minimal"}, json=rows, timeout=60)
         response.raise_for_status(); print(f"Uploaded {len(rows)} DEN-scope Vinted snapshots at {captured_at}")
+        sync_live_listing_metadata([{"vinted_item_id": row["vinted_item_id"], "title": row["title"], "price_pln": row["price_pln"], "photo_url": row["photo_url"]} for row in rows])
         active_vinted_ids = {str(listing["id"]) for listing in live_items}
         ACTIVE_VINTED_IDS = sorted(active_vinted_ids)
         candidates = eligible_unlisted_items() + eligible_relist_items(active_vinted_ids)
