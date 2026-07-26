@@ -5,13 +5,14 @@ export const sb=createClient('https://qgjkxtolyhbwpvncwtkn.supabase.co','sb_publ
 export const $=id=>document.getElementById(id);
 export const dateTime=value=>value?new Intl.DateTimeFormat('pl-PL',{dateStyle:'medium',timeStyle:'short'}).format(new Date(value)): '—';
 export const safe=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
-export const money=value=>value===null||value===undefined||value===''?'—':new Intl.NumberFormat('pl-PL',{style:'currency',currency:'PLN',maximumFractionDigits:0}).format(Number(value));
+export const money=value=>{if(value===null||value===undefined||value==='')return '—';const numeric=Number(value),fraction=Math.abs(numeric%1)>0.000001;return new Intl.NumberFormat('pl-PL',{style:'currency',currency:'PLN',minimumFractionDigits:fraction?2:0,maximumFractionDigits:fraction?2:0}).format(numeric)};
 export const date=value=>value?new Intl.DateTimeFormat('pl-PL',{dateStyle:'medium'}).format(new Date(value)): '—';
 export const pendingExternalReviews=events=>(events||[]).filter(event=>event.state==='NEEDS_REVIEW');
 export const toast=message=>{const el=document.createElement('div');el.className='toast';el.textContent=message;document.body.append(el);setTimeout(()=>el.remove(),2600)};
-const cacheKey='fadewell-hq-data-v2';
-const cacheOpen=()=>new Promise((resolve,reject)=>{const request=indexedDB.open('fadewell-hq',1);request.onupgradeneeded=()=>request.result.createObjectStore('cache');request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)});
-const cacheGet=async()=>{try{const db=await cacheOpen();return await new Promise(resolve=>{const request=db.transaction('cache').objectStore('cache').get(cacheKey);request.onsuccess=()=>resolve(request.result||null);request.onerror=()=>resolve(null)})}catch{return null}};
+const cacheKey='fadewell-hq-data-v3',cacheMaxAgeMs=2*60*60*1000;
+const cacheOpen=()=>new Promise((resolve,reject)=>{const request=indexedDB.open('fadewell-hq',2);request.onupgradeneeded=()=>{const db=request.result;if(db.objectStoreNames.contains('cache'))db.deleteObjectStore('cache');db.createObjectStore('cache')};request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)});
+const cacheDelete=async()=>{try{const db=await cacheOpen();await new Promise(resolve=>{const request=db.transaction('cache','readwrite').objectStore('cache').clear();request.onsuccess=request.onerror=resolve})}catch{}};
+const cacheGet=async()=>{try{const db=await cacheOpen();const cached=await new Promise(resolve=>{const request=db.transaction('cache').objectStore('cache').get(cacheKey);request.onsuccess=()=>resolve(request.result||null);request.onerror=()=>resolve(null)});if(cached?.savedAt&&Date.now()-cached.savedAt>cacheMaxAgeMs){await cacheDelete();return null}return cached}catch{return null}};
 const cachePut=async value=>{try{if(JSON.stringify(value).length>1500000)return;const db=await cacheOpen();await new Promise(resolve=>{const request=db.transaction('cache','readwrite').objectStore('cache').put(value,cacheKey);request.onsuccess=request.onerror=resolve})}catch{}};
 const pack=data=>({...data,linked:[...(data.linked||new Map())]});
 const unpack=data=>({...data,linked:new Map(data.linked||[])});
