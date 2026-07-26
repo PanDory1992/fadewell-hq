@@ -17,6 +17,7 @@ SERVICE_KEY = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
 COLLECTOR_MODE = os.environ.get("COLLECTOR_MODE", "manual").lower()
 COLLECTOR_SOURCE = os.environ.get("COLLECTOR_SOURCE", "GITHUB_MANUAL")
 DB_HEADERS = {"apikey": SERVICE_KEY, "Authorization": f"Bearer {SERVICE_KEY}"}
+ACTIVE_VINTED_IDS = []
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
     "Accept": "application/json, text/plain, */*", "Accept-Language": "pl-PL,pl;q=0.9,en;q=0.7",
@@ -180,12 +181,26 @@ def fetch_new_listing_description(vinted_id):
 def auto_link(match, listing):
     item = match["item"]; vinted_id = str(listing["id"]); external_key = f"auto-resolver-link-{vinted_id}"
     relist = bool(item.get("vinted_item_id") and str(item["vinted_item_id"]) != vinted_id)
+    if relist:
+        payload = {
+            "item_id": item["item_id"], "old_vinted_item_id": str(item["vinted_item_id"]),
+            "new_vinted_item_id": vinted_id, "observed_listing_ids": ACTIVE_VINTED_IDS,
+            "occurred_on": datetime.now(timezone.utc).date().isoformat(), "amount": amount(listing.get("price")),
+            "listing_url": f"https://www.vinted.pl/items/{vinted_id}", "live_title": listing.get("title"),
+            "external_key": f"auto-relist-{item['vinted_item_id']}-{vinted_id}",
+            "evidence": {"score": match["score"], "reasons": match["reasons"], "resolver": "conservative-v2"},
+        }
+        response = requests.post(f"{SUPABASE_URL}/rest/v1/rpc/apply_hq_system_relist", headers={"apikey": SERVICE_KEY, "Authorization": f"Bearer {SERVICE_KEY}", "Content-Type": "application/json"}, json={"p": payload}, timeout=60)
+        response.raise_for_status()
+        print(f"Auto-relisted {item['vinted_item_id']} -> {vinted_id} for {item['item_id']}")
+        return
     payload = {"action_type":"LISTED", "item_id":item["item_id"], "occurred_on":datetime.now(timezone.utc).date().isoformat(), "amount":amount(listing.get("price")), "vinted_item_id":vinted_id, "listing_url":f"https://www.vinted.pl/items/{vinted_id}", "live_title":listing.get("title"), "note":f"SYSTEM {'relist' if relist else 'auto-resolver'}: score {match['score']}; {'; '.join(match['reasons'])}", "source":"SYSTEM", "external_key":external_key, "relist":relist}
     response = requests.post(f"{SUPABASE_URL}/rest/v1/rpc/apply_hq_ledger_action", headers={"apikey": SERVICE_KEY, "Authorization": f"Bearer {SERVICE_KEY}", "Content-Type":"application/json"}, json={"p": payload}, timeout=60)
     response.raise_for_status()
     print(f"Auto-linked {vinted_id} -> {item['item_id']} ({match['score']}: {', '.join(match['reasons'])})")
 
 def main():
+    global ACTIVE_VINTED_IDS
     lease = begin_collector_run()
     if not lease.get("accepted"):
         print(f"Collector skipped safely: {lease.get('reason')} ({lease})")
@@ -206,6 +221,7 @@ def main():
         response = requests.post(f"{SUPABASE_URL}/rest/v1/hq_listing_snapshots?on_conflict=vinted_item_id,captured_at", headers={**DB_HEADERS, "Content-Type": "application/json", "Prefer": "resolution=merge-duplicates,return=minimal"}, json=rows, timeout=60)
         response.raise_for_status(); print(f"Uploaded {len(rows)} DEN-scope Vinted snapshots at {captured_at}")
         active_vinted_ids = {str(listing["id"]) for listing in live_items}
+        ACTIVE_VINTED_IDS = sorted(active_vinted_ids)
         candidates = eligible_unlisted_items() + eligible_relist_items(active_vinted_ids)
         new_listings = [listing for listing in live_items if str(listing["id"]) not in seen_before]
         resolver_listings = unresolved_live_listings(live_items, linked_listing_ids())
