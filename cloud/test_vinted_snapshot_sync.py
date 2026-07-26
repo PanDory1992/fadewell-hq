@@ -113,7 +113,16 @@ class SnapshotPaginationTests(unittest.TestCase):
             sync.auto_link(match, listing)
         payload = post.call_args.kwargs["json"]
         self.assertEqual(payload["p"]["item_id"], "DEN-064")
-        self.assertTrue(payload["p"]["relist"])
+        self.assertEqual(payload["p"]["new_vinted_item_id"], "9405604352")
+
+    def test_relist_uses_atomic_lineage_rpc(self):
+        match = {"item": {"item_id": "DEN-064", "vinted_item_id": "8717257628"}, "score": 107, "reasons": ["exact relist evidence"]}
+        listing = {"id": "9405604352", "title": "Lee 101 Rider W30 L32", "price": {"amount": "239.00"}}
+        response = SimpleNamespace(raise_for_status=lambda: None)
+        with patch.object(sync, "ACTIVE_VINTED_IDS", ["9405604352"]), patch.object(sync.requests, "post", return_value=response) as post:
+            sync.auto_link(match, listing)
+        self.assertIn("apply_hq_system_relist", post.call_args.args[0])
+        self.assertEqual(post.call_args.kwargs["json"]["p"]["old_vinted_item_id"], "8717257628")
 
     def test_unresolved_listing_is_rechecked_after_its_first_snapshot(self):
         listings = [{"id": "9494323317"}, {"id": "9405604352"}]
