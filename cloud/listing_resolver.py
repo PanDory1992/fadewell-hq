@@ -103,7 +103,14 @@ def score(listing: dict[str, Any], item: dict[str, Any]) -> dict[str, Any]:
             reasons.append("cena blisko estymaty")
     except (TypeError, ValueError, ZeroDivisionError):
         pass
-    return {"item": item, "score": points, "reasons": reasons, "strong": bool(listing_sizes & item_sizes) and bool(listing_models & item_models)}
+    same_sizes = listing_sizes & item_sizes
+    complete_size = any(value.startswith("w") for value in same_sizes) and any(value.startswith("l") for value in same_sizes)
+    aligned_relist_attribute = bool(listing_colours & item_colours) or bool(listing_countries & item_countries)
+    relist_strong = bool(item.get("vinted_item_id")) and complete_size and len(shared) >= 4 and aligned_relist_attribute
+    strong = (bool(same_sizes) and bool(listing_models & item_models)) or relist_strong
+    if relist_strong:
+        reasons.append("jednoznaczny profil relistu")
+    return {"item": item, "score": points, "reasons": reasons, "strong": strong}
 
 
 def best_match(listing: dict[str, Any], items: list[dict[str, Any]]) -> dict[str, Any] | None:

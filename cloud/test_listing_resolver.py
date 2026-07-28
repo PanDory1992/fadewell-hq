@@ -45,6 +45,25 @@ class ListingResolverTests(unittest.TestCase):
         self.assertTrue(result["auto"])
         self.assertEqual(result["item"]["item_id"], "DEN-141")
 
+    def test_unique_relist_without_model_number_can_autolink(self):
+        listing = {"title": "Calvin Klein Vintage Straight Jeans – Mid Blue – W33 L30 – Made in USA", "price_pln": 129}
+        relisted = item("DEN-046", "CK 33 USA Skracane", 100)
+        relisted.update({"vinted_item_id": "8116225370", "live_title": "Calvin Klein Vintage Straight Jeans – Navy Blue – W33 L30 – Made in USA"})
+        result = best_match(listing, [relisted])
+        self.assertTrue(result["auto"])
+        self.assertEqual(result["item"]["item_id"], "DEN-046")
+        self.assertIn("jednoznaczny profil relistu", result["reasons"])
+
+    def test_two_near_identical_relist_candidates_stay_manual(self):
+        listing = {"title": "Calvin Klein Vintage Straight Jeans – Mid Blue – W33 L30 – Made in USA", "price_pln": 129}
+        candidates = []
+        for den, old_id in (("DEN-046", "8116225370"), ("DEN-047", "8116225371")):
+            candidate = item(den, "CK 33 USA Skracane", 100)
+            candidate.update({"vinted_item_id": old_id, "live_title": "Calvin Klein Vintage Straight Jeans – Navy Blue – W33 L30 – Made in USA"})
+            candidates.append(candidate)
+        result = best_match(listing, candidates)
+        self.assertFalse(result["auto"])
+
     def test_marker_normalizes_den_identifier(self):
         self.assertEqual(marker("Proof #DEN-00123"), "DEN-123")
 

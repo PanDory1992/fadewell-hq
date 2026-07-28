@@ -18,7 +18,7 @@ const countries = (value: unknown) => families(value,{poland:/\b(?:poland|polska
 const marker = (value: unknown) => {const found=text(value).match(/#den[-_ ]?0*(\d{1,5})\b/i);return found?`DEN-${String(Number(found[1])).padStart(3,'0')}`:null;};
 
 function score(listing:Listing,item:Item){
-  const listingText=`${listing.title||''} ${listing.description||''}`,itemText=`${item.name||''} ${item.category||''} ${item.advantage||''}`;
+  const listingText=`${listing.title||''} ${listing.description||''}`,itemText=`${item.name||''} ${item.live_title||''} ${item.category||''} ${item.advantage||''}`;
   if(marker(listingText)===item.item_id)return{item,score:1000,reasons:['marker #den'],strong:true};
   const shared=overlap(tokens(listingText),tokens(itemText)),sameSizes=overlap(sizes(listingText),sizes(itemText)),sameModels=overlap(models(listingText),models(itemText)),listingColours=colours(listingText),itemColours=colours(itemText),listingCountries=countries(listingText),itemCountries=countries(itemText);
   let points=0;const reasons:string[]=[];
@@ -29,7 +29,11 @@ function score(listing:Listing,item:Item){
   if(listingCountries.size&&itemCountries.size){if(overlap(listingCountries,itemCountries).size){points+=10;reasons.push('zgodny kraj pochodzenia');}else{points-=20;reasons.push('sprzeczny kraj pochodzenia');}}
   const estimate=Number(item.estimate_sale_price),price=Number(listing.price_pln);
   if(estimate>0&&price>0&&Math.abs(price-estimate)/estimate<=.30){points+=5;reasons.push('cena blisko estymaty');}
-  return{item,score:points,reasons,strong:sameSizes.size>0&&sameModels.size>0};
+  const completeSize=[...sameSizes].some(value=>value.startsWith('w'))&&[...sameSizes].some(value=>value.startsWith('l'));
+  const alignedRelistAttribute=overlap(listingColours,itemColours).size>0||overlap(listingCountries,itemCountries).size>0;
+  const relistStrong=Boolean(item.vinted_item_id)&&completeSize&&shared.size>=4&&alignedRelistAttribute;
+  if(relistStrong)reasons.push('jednoznaczny profil relistu');
+  return{item,score:points,reasons,strong:(sameSizes.size>0&&sameModels.size>0)||relistStrong};
 }
 
 export function bestMatch(listing:Listing,items:Item[]){

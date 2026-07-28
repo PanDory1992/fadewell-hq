@@ -201,6 +201,10 @@ def auto_link(match, listing):
         }
         response = requests.post(f"{SUPABASE_URL}/rest/v1/rpc/apply_hq_system_relist", headers={"apikey": SERVICE_KEY, "Authorization": f"Bearer {SERVICE_KEY}", "Content-Type": "application/json"}, json={"p": payload}, timeout=60)
         response.raise_for_status()
+        result = response.json() if callable(getattr(response, "json", None)) else {}
+        if result.get("deferred"):
+            print(f"Deferred relist {item['vinted_item_id']} -> {vinted_id} for {item['item_id']}: {result.get('reason', 'waiting for stable snapshots')}")
+            return
         print(f"Auto-relisted {item['vinted_item_id']} -> {vinted_id} for {item['item_id']}")
         return
     payload = {"action_type":"LISTED", "item_id":item["item_id"], "occurred_on":datetime.now(timezone.utc).date().isoformat(), "amount":amount(listing.get("price")), "vinted_item_id":vinted_id, "listing_url":f"https://www.vinted.pl/items/{vinted_id}", "live_title":listing.get("title"), "note":f"SYSTEM {'relist' if relist else 'auto-resolver'}: score {match['score']}; {'; '.join(match['reasons'])}", "source":"SYSTEM", "external_key":external_key, "relist":relist}
