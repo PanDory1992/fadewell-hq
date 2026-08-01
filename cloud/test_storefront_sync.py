@@ -52,6 +52,27 @@ Hips: 52 cm""")
         self.assertEqual(result["inseam"]["cm"], 80.5)
         self.assertEqual(set(sf.REQUIRED_MEASUREMENTS) - set(result), set())
 
+    def test_measurements_ignore_model_year_and_other_numbers_on_one_line(self):
+        result = sf.extract_measurements(
+            "Levi's 550 vintage 1995. Waist: 44 cm • Front rise: 30 cm • "
+            "Inseam: 86 cm • Leg opening: 17.5 cm • Overall length: 115 cm"
+        )
+        self.assertEqual(result["waist"]["cm"], 44)
+        self.assertEqual(result["rise"]["cm"], 30)
+        self.assertEqual(result["leg_opening"]["cm"], 17.5)
+
+    def test_implausible_model_number_is_not_a_measurement(self):
+        result = sf.extract_measurements("High-rise Levi's 501 jeans. Rise: 28 cm")
+        self.assertEqual(result["rise"]["cm"], 28)
+        self.assertNotIn(501, [value["cm"] for value in result.values()])
+
+    @patch("storefront_sync.requests.post")
+    def test_dna_reconciliation_uses_service_only_rpc(self, post):
+        post.return_value = FakeResponse(payload=3)
+        self.assertEqual(sf.reconcile_storefront_dna("https://db.example/", "secret"), 3)
+        self.assertEqual(post.call_args.args[0], "https://db.example/rest/v1/rpc/sync_fadewell_storefront_dna")
+        self.assertEqual(post.call_args.kwargs["json"], {})
+
     def test_category_comes_from_vinted_not_title(self):
         shorts = {"id": 1, "title": "Perfect vintage jeans", "catalog": {"title": "Denim shorts"}}
         trousers = {"id": 2, "title": "Unhelpful title", "catalog": {"title": "Trousers"}}
