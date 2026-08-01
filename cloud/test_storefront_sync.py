@@ -66,6 +66,19 @@ Hips: 52 cm""")
         self.assertEqual(result["rise"]["cm"], 28)
         self.assertNotIn(501, [value["cm"] for value in result.values()])
 
+    def test_waist_does_not_capture_rise_from_fit_prose(self):
+        result = sf.extract_measurements("""Fit:
+W29 L30 — Sits higher on the waist (29 cm rise) with a tapered leg.
+
+Measurements (measured flat):
+• Waist: 39 cm
+• Inseam: 78 cm
+• Total length: 106 cm
+• Leg opening: 17.5 cm
+• Front rise: 29 cm""")
+        self.assertEqual(result["waist"]["cm"], 39)
+        self.assertEqual(result["rise"]["cm"], 29)
+
     @patch("storefront_sync.requests.post")
     def test_dna_reconciliation_uses_service_only_rpc(self, post):
         post.return_value = FakeResponse(payload=3)

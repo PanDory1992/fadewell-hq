@@ -49,10 +49,14 @@ def extract_measurements(description):
     text = _ascii(description)
     for key, aliases in MEASUREMENT_ALIASES.items():
         for alias in aliases:
-            match = re.search(
-                rf"\b{re.escape(alias)}\b[^\d\n]{{0,28}}(?<!\d)(\d{{1,3}}(?:[.,]\d{{1,2}})?)\s*cm\b",
-                text,
-            )
+            number = r"(\d{1,3}(?:[.,]\d{1,2})?)\s*cm\b"
+            match = re.search(rf"\b{re.escape(alias)}\b\s*[:\-–—]\s*{number}", text)
+            if not match:
+                match = re.search(
+                    rf"(?:^|[\n•*|])\s*{re.escape(alias)}\b[^\w\d\n]{{0,8}}{number}",
+                    text,
+                    re.MULTILINE,
+                )
             if match:
                 value = float(match.group(1).replace(",", "."))
                 low, high = MEASUREMENT_RANGES[key]
