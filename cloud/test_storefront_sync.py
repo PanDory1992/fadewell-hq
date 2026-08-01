@@ -92,6 +92,10 @@ Hips: 52 cm""")
         with self.assertRaisesRegex(RuntimeError, "mixed-seller"):
             sf.fetch_user_catalog(session, 123)
 
+    def test_vinted_requests_use_browser_identity_headers(self):
+        self.assertIn("Mozilla/5.0", sf.VINTED_HEADERS["User-Agent"])
+        self.assertEqual(sf.VINTED_HEADERS["Accept-Language"], "pl-PL,pl;q=0.9,en;q=0.7")
+
     def test_http_error_retains_response_for_404_fallback(self):
         response = FakeResponse(404)
         with self.assertRaises(requests.HTTPError) as raised:
