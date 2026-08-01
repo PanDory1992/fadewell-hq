@@ -7,9 +7,10 @@ import requests
 
 from storefront_sync import (
     attach_catalog_path, build_storefront_record, category_evidence, fetch_catalog_paths,
-    fetch_user_catalog, fetch_vinted_detail, reconcile_storefront_availability,
+    fetch_vinted_detail, reconcile_storefront_availability,
     reconcile_storefront_sales, upsert_storefront_records,
 )
+from vinted_snapshot_sync import HEADERS, fetch_items
 
 SUPABASE_URL = os.environ["SUPABASE_URL"].rstrip("/")
 SERVICE_KEY = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
@@ -19,8 +20,8 @@ DETAIL_DELAY = float(os.environ.get("VINTED_DETAIL_DELAY_SECONDS", "0.35"))
 
 def main():
     session = cloudscraper.create_scraper()
-    session.get("https://www.vinted.pl", timeout=30)
-    catalog_items = fetch_user_catalog(session, USER_ID)
+    session.get("https://www.vinted.pl", headers=HEADERS, timeout=30)
+    catalog_items = list(fetch_items(session=session))
     try:
         catalog_paths = fetch_catalog_paths(session)
     except requests.HTTPError as error:

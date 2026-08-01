@@ -23,6 +23,12 @@ ALLOWED_CATEGORY_WORDS = (
     "trousers", "pants", "spodnie", "chinos", "cargo trousers", "cargo pants",
 )
 EXCLUDED_CATEGORY_WORDS = ("shorts", "szort", "skirt", "spodnic", "jumpsuit", "kombinezon")
+VINTED_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "pl-PL,pl;q=0.9,en;q=0.7",
+    "X-Requested-With": "XMLHttpRequest",
+}
 
 
 def _ascii(value):
@@ -73,7 +79,7 @@ def fetch_catalog_paths(session):
     response = get_with_retry(
         session,
         "https://www.vinted.pl/api/v2/catalogs",
-        headers={"Accept": "application/json, text/plain, */*", "X-Requested-With": "XMLHttpRequest"},
+        headers=VINTED_HEADERS,
         timeout=30,
     )
     response.raise_for_status()
@@ -125,7 +131,7 @@ def fetch_user_catalog(session, user_id):
             session,
             "https://www.vinted.pl/api/v2/catalog/items",
             params={"user_ids[]": int(user_id), "page": page, "per_page": 96, "order": "newest_first"},
-            headers={"Accept": "application/json, text/plain, */*", "X-Requested-With": "XMLHttpRequest"},
+            headers=VINTED_HEADERS,
             timeout=30,
         )
         payload = response.json()
@@ -231,7 +237,7 @@ def fetch_vinted_detail(session, item):
     response = get_with_retry(
         session,
         f"https://www.vinted.pl/api/v2/items/{item_id}",
-        headers={"Accept": "application/json, text/plain, */*", "X-Requested-With": "XMLHttpRequest"},
+        headers=VINTED_HEADERS,
         timeout=30,
     )
     response.raise_for_status()
