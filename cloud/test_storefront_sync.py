@@ -33,7 +33,10 @@ class FakeSession:
 
     def get(self, url, **kwargs):
         self.calls.append((url, kwargs))
-        return self.responses.pop(0)
+        response = self.responses.pop(0)
+        if isinstance(response, BaseException):
+            raise response
+        return response
 
 
 class StorefrontSyncTests(unittest.TestCase):
@@ -90,6 +93,14 @@ Hips: 52 cm""")
         self.assertEqual(response.json(), {"ok": True})
         self.assertEqual(len(session.calls), 2)
         sleep.assert_called_once_with(1.0)
+
+    @patch("storefront_sync.time.sleep")
+    def test_vinted_read_timeout_is_retried(self, sleep):
+        session = FakeSession([requests.ReadTimeout("temporary"), FakeResponse(200, {"ok": True})])
+        response = sf.get_with_retry(session, "https://example.test")
+        self.assertEqual(response.json(), {"ok": True})
+        self.assertEqual(len(session.calls), 2)
+        sleep.assert_called_once_with(2)
 
     def test_catalog_refuses_mixed_seller_rows(self):
         session = FakeSession([FakeResponse(200, {
