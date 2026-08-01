@@ -11,6 +11,11 @@ import requests
 
 
 REQUIRED_MEASUREMENTS = ("waist", "rise", "inseam", "leg_opening", "overall_length")
+MEASUREMENT_RANGES = {
+    "waist": (20, 80), "rise": (15, 60), "inseam": (30, 130),
+    "leg_opening": (8, 60), "overall_length": (50, 150),
+    "thigh": (10, 65), "hips": (20, 90),
+}
 MEASUREMENT_ALIASES = {
     "waist": ("waist", "pas"),
     "rise": ("front rise", "rise", "stan"),
@@ -39,18 +44,21 @@ def _ascii(value):
 
 
 def extract_measurements(description):
-    """Extract centimeters while keeping the original display value."""
+    """Extract the value beside each label, never an earlier model/year number."""
     measurements = {}
-    for raw_line in str(description or "").splitlines():
-        line = _ascii(raw_line)
-        for key, aliases in MEASUREMENT_ALIASES.items():
-            if key in measurements or not any(re.search(rf"\b{re.escape(alias)}\b", line) for alias in aliases):
-                continue
-            match = re.search(r"(?<!\d)(\d{1,3}(?:[.,]\d{1,2})?)\s*(?:cm\b)?", line)
+    text = _ascii(description)
+    for key, aliases in MEASUREMENT_ALIASES.items():
+        for alias in aliases:
+            match = re.search(
+                rf"\b{re.escape(alias)}\b[^\d\n]{{0,28}}(?<!\d)(\d{{1,3}}(?:[.,]\d{{1,2}})?)\s*cm\b",
+                text,
+            )
             if match:
                 value = float(match.group(1).replace(",", "."))
-                measurements[key] = {"cm": value, "display": f"{value:g} cm"}
-            break
+                low, high = MEASUREMENT_RANGES[key]
+                if low <= value <= high:
+                    measurements[key] = {"cm": value, "display": f"{value:g} cm"}
+                    break
     return measurements
 
 
@@ -340,6 +348,21 @@ def upsert_storefront_records(supabase_url, service_key, records):
 def reconcile_storefront_sales(supabase_url, service_key):
     response = requests.post(
         f"{supabase_url.rstrip('/')}/rest/v1/rpc/sync_fadewell_storefront_sales",
+        headers={
+            "apikey": service_key,
+            "Authorization": f"Bearer {service_key}",
+            "Content-Type": "application/json",
+        },
+        json={},
+        timeout=60,
+    )
+    response.raise_for_status()
+    return response.json()
+
+
+def reconcile_storefront_dna(supabase_url, service_key):
+    response = requests.post(
+        f"{supabase_url.rstrip('/')}/rest/v1/rpc/sync_fadewell_storefront_dna",
         headers={
             "apikey": service_key,
             "Authorization": f"Bearer {service_key}",

@@ -8,7 +8,7 @@ import requests
 from storefront_sync import (
     attach_catalog_path, build_storefront_record, category_evidence, fetch_catalog_paths,
     fetch_vinted_detail, reconcile_storefront_availability,
-    reconcile_storefront_sales, upsert_storefront_records,
+    reconcile_storefront_dna, reconcile_storefront_sales, upsert_storefront_records,
 )
 from vinted_snapshot_sync import HEADERS, fetch_items
 
@@ -45,9 +45,10 @@ def main():
         time.sleep(DETAIL_DELAY)
     upsert_storefront_records(SUPABASE_URL, SERVICE_KEY, records)
     reconcile_storefront_availability(SUPABASE_URL, SERVICE_KEY, [item["id"] for item in catalog_items])
+    dna_changed = reconcile_storefront_dna(SUPABASE_URL, SERVICE_KEY)
     sold_changed = reconcile_storefront_sales(SUPABASE_URL, SERVICE_KEY)
     published = sum(1 for record in records if record["published"])
-    print(f"Storefront sync: {len(records)} enriched, {published} publishable, {len(failures)} failed, {sold_changed} sales reconciled")
+    print(f"Storefront sync: {len(records)} enriched, {published} publishable, {len(failures)} failed, {dna_changed} DNA rows updated, {sold_changed} sales reconciled")
     for failure in failures[:10]:
         print(f"Detail unavailable {failure['id']}: {failure['error']}")
     if failures:
