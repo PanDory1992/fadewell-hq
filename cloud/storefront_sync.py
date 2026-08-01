@@ -234,28 +234,22 @@ def _amount(value):
 
 
 def fetch_vinted_detail(session, item):
-    """Enrich a catalog item from Vinted's public detail endpoint."""
+    """Enrich one listing from its public item page.
+
+    Vinted's former JSON item endpoint now returns 404. Calling it before every
+    page doubled the request rate and caused avoidable 429 responses during a
+    complete wardrobe sync.
+    """
     item_id = str(item["id"])
-    try:
-        response = get_with_retry(
-            session,
-            f"https://www.vinted.pl/api/v2/items/{item_id}",
-            headers=VINTED_HEADERS,
-            timeout=30,
-        )
-        payload = response.json()
-        detail = payload.get("item") or payload
-    except requests.HTTPError as error:
-        if error.response is None or error.response.status_code != 404:
-            raise
-        page = get_with_retry(
-            session,
-            f"https://www.vinted.pl/items/{item_id}",
-            headers={**VINTED_HEADERS, "Accept": "text/html,application/xhtml+xml"},
-            timeout=30,
-        )
-        detail = parse_vinted_item_page(page.text, item_id)
-        detail.setdefault("url", page.url)
+    page = get_with_retry(
+        session,
+        f"https://www.vinted.pl/items/{item_id}",
+        attempts=7,
+        headers={**VINTED_HEADERS, "Accept": "text/html,application/xhtml+xml"},
+        timeout=30,
+    )
+    detail = parse_vinted_item_page(page.text, item_id)
+    detail.setdefault("url", getattr(page, "url", f"https://www.vinted.pl/items/{item_id}"))
     if str(detail.get("id")) != item_id:
         raise RuntimeError(f"Vinted detail identity mismatch for {item_id}")
     merged = dict(item)

@@ -15,7 +15,7 @@ from vinted_snapshot_sync import HEADERS, fetch_items
 SUPABASE_URL = os.environ["SUPABASE_URL"].rstrip("/")
 SERVICE_KEY = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
 USER_ID = int(os.environ.get("VINTED_USER_ID", "271911480"))
-DETAIL_DELAY = float(os.environ.get("VINTED_DETAIL_DELAY_SECONDS", "0.35"))
+DETAIL_DELAY = float(os.environ.get("VINTED_DETAIL_DELAY_SECONDS", "1.0"))
 
 
 def main():

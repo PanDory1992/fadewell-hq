@@ -11,10 +11,12 @@ import storefront_sync as sf
 
 
 class FakeResponse:
-    def __init__(self, status_code=200, payload=None, headers=None):
+    def __init__(self, status_code=200, payload=None, headers=None, text="", url="https://example.test"):
         self.status_code = status_code
         self._payload = payload or {}
         self.headers = headers or {}
+        self.text = text
+        self.url = url
 
     def json(self):
         return self._payload
@@ -113,6 +115,19 @@ Hips: 52 cm""")
         self.assertEqual(detail["description"], "Waist 40 cm")
         self.assertEqual(detail["category"]["title"], "Mężczyźni Dżinsy straight fit")
         self.assertEqual(sf.photo_urls(detail), ["one.jpg", "two.jpg"])
+
+    def test_item_detail_uses_one_public_page_request(self):
+        product = {
+            "@type": "Product", "name": "A pair", "description": "Waist 40 cm",
+            "category": "Men Jeans", "image": "main.jpg",
+            "offers": {"url": "https://www.vinted.pl/items/123-a-pair", "price": 129},
+        }
+        page = f'<script type="application/ld+json">{json.dumps(product)}</script>'
+        session = FakeSession([FakeResponse(text=page, url="https://www.vinted.pl/items/123-a-pair")])
+        detail = sf.fetch_vinted_detail(session, {"id": 123})
+        self.assertEqual(detail["title"], "A pair")
+        self.assertEqual(len(session.calls), 1)
+        self.assertEqual(session.calls[0][0], "https://www.vinted.pl/items/123")
 
     def test_http_error_retains_response_for_404_fallback(self):
         response = FakeResponse(404)
