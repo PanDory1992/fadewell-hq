@@ -1,0 +1,26 @@
+name: Test HQ
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - run: pip install --disable-pip-version-check cloudscraper requests
+      - name: Run Python tests
+        run: python -m unittest discover -s cloud -p 'test_*.py'
+      - name: Check HQ text encoding
+        run: node scripts/check_mojibake.mjs web
