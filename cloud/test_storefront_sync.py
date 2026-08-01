@@ -1,4 +1,5 @@
 import sys
+import json
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -56,6 +57,10 @@ Hips: 52 cm""")
         item = sf.attach_catalog_path({"id": 3, "catalog_id": 42}, {"42": ["Men", "Clothing", "Trousers", "Jeans"]})
         self.assertEqual(sf.garment_type_from_vinted_category(item), "JEANS")
 
+    def test_polish_vinted_jeans_category_is_allowed(self):
+        item = {"id": 3, "category": {"title": "Mężczyźni Dżinsy straight fit"}}
+        self.assertEqual(sf.garment_type_from_vinted_category(item), "JEANS")
+
     def test_complete_pair_is_publishable(self):
         item = {
             "id": 123,
@@ -95,6 +100,19 @@ Hips: 52 cm""")
     def test_vinted_requests_use_browser_identity_headers(self):
         self.assertIn("Mozilla/5.0", sf.VINTED_HEADERS["User-Agent"])
         self.assertEqual(sf.VINTED_HEADERS["Accept-Language"], "pl-PL,pl;q=0.9,en;q=0.7")
+
+    def test_item_page_parser_combines_json_ld_with_full_gallery(self):
+        product = {
+            "@type": "Product", "name": "A pair", "description": "Waist 40 cm",
+            "category": "Mężczyźni Dżinsy straight fit", "image": "main.jpg",
+            "offers": {"url": "https://www.vinted.pl/items/123-a-pair", "price": 129},
+        }
+        flight = json.dumps([1, 'fd:[{"value":{"id":123,"seller_id":7,"photos":[{"url":"one.jpg"},{"full_size_url":"two.jpg"}]}}]'])
+        page = f'<script>self.__next_f.push({flight})</script><script type="application/ld+json">{json.dumps(product)}</script>'
+        detail = sf.parse_vinted_item_page(page, 123)
+        self.assertEqual(detail["description"], "Waist 40 cm")
+        self.assertEqual(detail["category"]["title"], "Mężczyźni Dżinsy straight fit")
+        self.assertEqual(sf.photo_urls(detail), ["one.jpg", "two.jpg"])
 
     def test_http_error_retains_response_for_404_fallback(self):
         response = FakeResponse(404)
