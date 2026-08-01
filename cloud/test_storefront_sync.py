@@ -1,9 +1,36 @@
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
+
+import requests
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import storefront_sync as sf
+
+
+class FakeResponse:
+    def __init__(self, status_code=200, payload=None, headers=None):
+        self.status_code = status_code
+        self._payload = payload or {}
+        self.headers = headers or {}
+
+    def json(self):
+        return self._payload
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise requests.HTTPError(f"HTTP {self.status_code}")
+
+
+class FakeSession:
+    def __init__(self, responses):
+        self.responses = list(responses)
+        self.calls = []
+
+    def get(self, url, **kwargs):
+        self.calls.append((url, kwargs))
+        return self.responses.pop(0)
 
 
 class StorefrontSyncTests(unittest.TestCase):
@@ -48,6 +75,22 @@ Hips: 52 cm""")
         record = sf.build_storefront_record(item)
         self.assertFalse(record["published"])
         self.assertIn("inseam", record["publication_notes"]["missing_measurements"])
+
+    @patch("storefront_sync.time.sleep")
+    def test_transient_vinted_response_is_retried(self, sleep):
+        session = FakeSession([FakeResponse(429, headers={"Retry-After": "1"}), FakeResponse(200, {"ok": True})])
+        response = sf.get_with_retry(session, "https://example.test")
+        self.assertEqual(response.json(), {"ok": True})
+        self.assertEqual(len(session.calls), 2)
+        sleep.assert_called_once_with(1.0)
+
+    def test_catalog_refuses_mixed_seller_rows(self):
+        session = FakeSession([FakeResponse(200, {
+            "items": [{"id": 1, "user": {"id": 999}}],
+            "pagination": {"total_pages": 1, "total_entries": 1},
+        })])
+        with self.assertRaisesRegex(RuntimeError, "mixed-seller"):
+            sf.fetch_user_catalog(session, 123)
 
 
 if __name__ == "__main__":

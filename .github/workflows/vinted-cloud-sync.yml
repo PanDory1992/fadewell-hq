@@ -1,8 +1,6 @@
 name: Sync Vinted Live Wardrobe
 
 on:
-  schedule:
-    - cron: '17 * * * *'
   workflow_dispatch:
     inputs:
       mode:
@@ -39,8 +37,8 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           VINTED_USER_ID: '271911480'
-          COLLECTOR_MODE: ${{ github.event_name == 'schedule' && 'watchdog' || inputs.mode == 'watchdog' && 'watchdog' || 'manual' }}
-          COLLECTOR_SOURCE: ${{ github.event_name == 'schedule' && 'GITHUB_SCHEDULED' || inputs.mode == 'watchdog' && 'GITHUB_FALLBACK' || inputs.mode == 'degraded' && 'GITHUB_DEGRADED' || 'GITHUB_MANUAL' }}
+          COLLECTOR_MODE: ${{ inputs.mode == 'watchdog' && 'watchdog' || 'manual' }}
+          COLLECTOR_SOURCE: ${{ inputs.mode == 'watchdog' && 'GITHUB_FALLBACK' || inputs.mode == 'degraded' && 'GITHUB_DEGRADED' || 'GITHUB_MANUAL' }}
         run: |
           for attempt in 1 2 3; do
             python cloud/vinted_snapshot_sync.py && exit 0

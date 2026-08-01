@@ -8,10 +8,6 @@ from pathlib import Path
 import cloudscraper
 import requests
 from listing_resolver import best_match
-from storefront_sync import (
-    attach_catalog_path, build_storefront_record, fetch_catalog_paths,
-    fetch_vinted_detail, reconcile_storefront_sales, upsert_storefront_records,
-)
 
 ROOT = Path(__file__).resolve().parents[1]
 SCOPE = json.loads((ROOT / "operational_scope.json").read_text(encoding="utf-8"))
@@ -231,11 +227,7 @@ def main():
     run_id = lease["run_id"]
     try:
         excluded = set(SCOPE["excluded_live_vinted_ids"]); known_den_ids = known_den_listing_ids(); captured_at = datetime.now(timezone.utc).isoformat(); rows = []; live_items = []; excluded_active = []
-        storefront_records = []
-        session = cloudscraper.create_scraper()
-        session.get("https://www.vinted.pl", headers=HEADERS, timeout=30)
-        catalog_paths = fetch_catalog_paths(session)
-        for item in fetch_items(session=session):
+        for item in fetch_items():
             item_id = str(item["id"])
             if item_id in excluded:
                 excluded_active.append({"vinted_item_id": item_id, "title": item.get("title") or None, "reason": "manual scope exclusion"})
@@ -243,11 +235,6 @@ def main():
             live_items.append(item)
             photo = item.get("photo") or {}; high = photo.get("high_resolution") or {}
             rows.append({"vinted_item_id": item_id, "captured_at": captured_at, "title": item.get("title"), "price_pln": amount(item.get("price")), "views": item.get("view_count") or 0, "favourites": item.get("favourite_count") or 0, "visible": bool(item.get("is_visible", True)), "photo_url": high.get("url") or photo.get("url"), "condition_label": condition_label(item), "source": "github_actions_vinted"})
-            try:
-                detail = attach_catalog_path(fetch_vinted_detail(session, item), catalog_paths)
-                storefront_records.append(build_storefront_record(detail, captured_at=captured_at))
-            except (requests.RequestException, RuntimeError, ValueError) as error:
-                print(f"Storefront detail unavailable for {item_id}; retaining the previous public record: {error}")
         reference_count = recent_reference_scope_count()
         if reference_count is not None and len(rows) < reference_count - 1:
             raise RuntimeError(f"Refusing partial Vinted snapshot: {len(rows)} DEN items against recent reference {reference_count}; expected at most one removal between runs")
@@ -255,9 +242,6 @@ def main():
         response = requests.post(f"{SUPABASE_URL}/rest/v1/hq_listing_snapshots?on_conflict=vinted_item_id,captured_at", headers={**DB_HEADERS, "Content-Type": "application/json", "Prefer": "resolution=merge-duplicates,return=minimal"}, json=rows, timeout=60)
         response.raise_for_status(); print(f"Uploaded {len(rows)} DEN-scope Vinted snapshots at {captured_at}")
         sync_live_listing_metadata([{"vinted_item_id": row["vinted_item_id"], "title": row["title"], "price_pln": row["price_pln"], "photo_url": row["photo_url"]} for row in rows])
-        upsert_storefront_records(SUPABASE_URL, SERVICE_KEY, storefront_records)
-        reconcile_storefront_sales(SUPABASE_URL, SERVICE_KEY)
-        print(f"Refreshed {len(storefront_records)} storefront record(s); incomplete pairs remain unpublished")
         active_vinted_ids = {str(listing["id"]) for listing in live_items}
         ACTIVE_VINTED_IDS = sorted(active_vinted_ids)
         candidates = eligible_unlisted_items() + eligible_relist_items(active_vinted_ids)

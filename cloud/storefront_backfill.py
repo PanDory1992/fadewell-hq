@@ -1,5 +1,6 @@
 """One-time/repeatable backfill of Pair Archive and current storefront facts."""
 import os
+import time
 
 import cloudscraper
 import requests
@@ -12,6 +13,7 @@ from storefront_sync import (
 SUPABASE_URL = os.environ["SUPABASE_URL"].rstrip("/")
 SERVICE_KEY = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
 HEADERS = {"apikey": SERVICE_KEY, "Authorization": f"Bearer {SERVICE_KEY}"}
+DETAIL_DELAY = float(os.environ.get("VINTED_DETAIL_DELAY_SECONDS", "0.35"))
 
 
 def ledger_listings():
@@ -39,6 +41,7 @@ def main():
             records.append(build_storefront_record(detail, sold=listing["ledger_status"] == "SOLD"))
         except (requests.RequestException, RuntimeError, ValueError) as error:
             failures.append({"vinted_item_id": item_id, "error": str(error)})
+        time.sleep(DETAIL_DELAY)
         if len(records) >= 25:
             upsert_storefront_records(SUPABASE_URL, SERVICE_KEY, records)
             records.clear()

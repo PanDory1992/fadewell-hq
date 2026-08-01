@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+import time
 from datetime import datetime, timezone
 
 import requests
@@ -69,7 +70,8 @@ def category_evidence(item):
 
 def fetch_catalog_paths(session):
     """Map Vinted catalog IDs to their Vinted-provided breadcrumb labels."""
-    response = session.get(
+    response = get_with_retry(
+        session,
         "https://www.vinted.pl/api/v2/catalogs",
         headers={"Accept": "application/json, text/plain, */*", "X-Requested-With": "XMLHttpRequest"},
         timeout=30,
@@ -93,6 +95,54 @@ def fetch_catalog_paths(session):
     for root in roots:
         visit(root, [])
     return paths
+
+
+def get_with_retry(session, url, *, attempts=4, **kwargs):
+    """Retry only transient Vinted responses, respecting Retry-After."""
+    last_response = None
+    for attempt in range(1, attempts + 1):
+        response = session.get(url, **kwargs)
+        last_response = response
+        if response.status_code not in (429, 500, 502, 503, 504):
+            response.raise_for_status()
+            return response
+        if attempt < attempts:
+            retry_after = response.headers.get("Retry-After") if getattr(response, "headers", None) else None
+            try:
+                delay = min(float(retry_after), 60) if retry_after is not None else min(2 ** attempt, 15)
+            except (TypeError, ValueError):
+                delay = min(2 ** attempt, 15)
+            time.sleep(delay)
+    last_response.raise_for_status()
+    return last_response
+
+
+def fetch_user_catalog(session, user_id):
+    """Fetch a complete seller wardrobe without accepting mixed-user rows."""
+    page, total_pages, items = 1, 1, []
+    while page <= total_pages:
+        response = get_with_retry(
+            session,
+            "https://www.vinted.pl/api/v2/catalog/items",
+            params={"user_ids[]": int(user_id), "page": page, "per_page": 96, "order": "newest_first"},
+            headers={"Accept": "application/json, text/plain, */*", "X-Requested-With": "XMLHttpRequest"},
+            timeout=30,
+        )
+        payload = response.json()
+        batch = payload.get("items") or []
+        if any(int((item.get("user") or {}).get("id") or 0) != int(user_id) for item in batch):
+            raise RuntimeError("Refusing mixed-seller Vinted response")
+        pagination = payload.get("pagination") or {}
+        total_pages = int(pagination.get("total_pages") or page)
+        if not batch and page < total_pages:
+            raise RuntimeError(f"Partial storefront pagination at page {page}/{total_pages}")
+        items.extend(batch)
+        page += 1
+    unique = {str(item["id"]): item for item in items}
+    advertised = payload.get("pagination", {}).get("total_entries") if items else 0
+    if advertised is not None and len(unique) < int(advertised):
+        raise RuntimeError(f"Partial storefront catalog: expected {advertised}, received {len(unique)}")
+    return list(unique.values())
 
 
 def attach_catalog_path(item, paths):
@@ -178,7 +228,8 @@ def _amount(value):
 def fetch_vinted_detail(session, item):
     """Enrich a catalog item from Vinted's public detail endpoint."""
     item_id = str(item["id"])
-    response = session.get(
+    response = get_with_retry(
+        session,
         f"https://www.vinted.pl/api/v2/items/{item_id}",
         headers={"Accept": "application/json, text/plain, */*", "X-Requested-With": "XMLHttpRequest"},
         timeout=30,
@@ -219,6 +270,17 @@ def reconcile_storefront_sales(supabase_url, service_key):
             "Content-Type": "application/json",
         },
         json={},
+        timeout=60,
+    )
+    response.raise_for_status()
+    return response.json()
+
+
+def reconcile_storefront_availability(supabase_url, service_key, live_ids):
+    response = requests.post(
+        f"{supabase_url.rstrip('/')}/rest/v1/rpc/sync_fadewell_storefront_availability",
+        headers={"apikey": service_key, "Authorization": f"Bearer {service_key}", "Content-Type": "application/json"},
+        json={"p_live_ids": [str(item_id) for item_id in live_ids]},
         timeout=60,
     )
     response.raise_for_status()
