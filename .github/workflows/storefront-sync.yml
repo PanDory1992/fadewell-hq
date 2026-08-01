@@ -27,4 +27,5 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           VINTED_USER_ID: '271911480'
+          STOREFRONT_ARCHIVE_SOLD_SINCE: '2026-08-01'
         run: python cloud/storefront_live_sync.py

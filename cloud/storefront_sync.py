@@ -242,6 +242,41 @@ def build_storefront_record(item, captured_at=None, sold=False):
     }
 
 
+def build_recovered_sold_record(detail, ledger_item, captured_at=None):
+    """Build an archive-only record when a sale predates its storefront copy.
+
+    The public sold page can retain the title, price and gallery while omitting
+    description/category data. A confirmed recent HQ sale is the state
+    authority; missing facts stay missing and are called out in provenance.
+    """
+    merged = dict(detail or {})
+    merged.setdefault("id", ledger_item["vinted_item_id"])
+    merged.setdefault("title", ledger_item.get("live_title"))
+    merged.setdefault("url", ledger_item.get("listing_url"))
+    merged.setdefault("price", {"amount": ledger_item.get("live_list_price")})
+    if not photo_urls(merged) and ledger_item.get("last_photo_url"):
+        merged["photos"] = [{"url": ledger_item["last_photo_url"]}]
+    record = build_storefront_record(merged, captured_at=captured_at, sold=True)
+    title_evidence = _ascii(record.get("title"))
+    if not record["garment_type"]:
+        if any(word in title_evidence for word in ("jeans", "jeansy", "dzinsy", "denim")):
+            record["garment_type"] = "JEANS"
+        elif any(word in title_evidence for word in ("trousers", "pants", "spodnie")):
+            record["garment_type"] = "TROUSERS"
+    record["available"] = False
+    record["sold"] = True
+    sold_on = str(ledger_item.get("sold_on") or "").strip()
+    record["sold_at"] = f"{sold_on}T00:00:00+00:00" if re.fullmatch(r"\d{4}-\d{2}-\d{2}", sold_on) else None
+    record["published"] = bool(record["title"] and record["photos"] and record["garment_type"])
+    record["publication_notes"] = {
+        **record["publication_notes"],
+        "archive_recovery": True,
+        "source": "confirmed_recent_hq_sale_and_public_vinted_page" if detail else "confirmed_recent_hq_sale",
+        "description_recovered": bool(record["description_raw"]),
+    }
+    return record
+
+
 def _amount(value):
     if isinstance(value, dict):
         value = value.get("amount")
@@ -347,6 +382,54 @@ def upsert_storefront_records(supabase_url, service_key, records):
         timeout=60,
     )
     response.raise_for_status()
+
+
+def fetch_recent_sold_ledger_items(supabase_url, service_key, sold_since):
+    response = requests.get(
+        f"{supabase_url.rstrip('/')}/rest/v1/hq_ledger_items",
+        headers={"apikey": service_key, "Authorization": f"Bearer {service_key}"},
+        params={
+            "select": "item_id,vinted_item_id,listing_url,live_title,live_list_price,last_photo_url,sold_on",
+            "ledger_status": "eq.SOLD",
+            "sold_on": f"gte.{sold_since}",
+            "vinted_item_id": "not.is.null",
+        },
+        timeout=60,
+    )
+    response.raise_for_status()
+    return response.json()
+
+
+def fetch_storefront_product_ids(supabase_url, service_key):
+    response = requests.get(
+        f"{supabase_url.rstrip('/')}/rest/v1/fadewell_storefront_products",
+        headers={"apikey": service_key, "Authorization": f"Bearer {service_key}"},
+        params={"select": "vinted_item_id"},
+        timeout=60,
+    )
+    response.raise_for_status()
+    return {str(row["vinted_item_id"]) for row in response.json()}
+
+
+def recover_missing_recent_sales(session, supabase_url, service_key, sold_since):
+    existing_ids = fetch_storefront_product_ids(supabase_url, service_key)
+    sold_items = fetch_recent_sold_ledger_items(supabase_url, service_key, sold_since)
+    records, failures = [], []
+    for ledger_item in sold_items:
+        item_id = str(ledger_item["vinted_item_id"])
+        if item_id in existing_ids:
+            continue
+        try:
+            detail = fetch_vinted_detail(session, {"id": item_id})
+        except (requests.RequestException, RuntimeError, ValueError):
+            detail = {}
+        record = build_recovered_sold_record(detail, ledger_item)
+        if record["published"]:
+            records.append(record)
+        else:
+            failures.append({"id": item_id, "error": "insufficient public evidence for archive card"})
+    upsert_storefront_records(supabase_url, service_key, records)
+    return records, failures
 
 
 def reconcile_storefront_sales(supabase_url, service_key):

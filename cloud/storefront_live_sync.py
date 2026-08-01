@@ -8,7 +8,8 @@ import requests
 from storefront_sync import (
     attach_catalog_path, build_storefront_record, category_evidence, fetch_catalog_paths,
     fetch_vinted_detail, reconcile_storefront_availability,
-    reconcile_storefront_dna, reconcile_storefront_sales, upsert_storefront_records,
+    reconcile_storefront_dna, reconcile_storefront_sales, recover_missing_recent_sales,
+    upsert_storefront_records,
 )
 from vinted_snapshot_sync import HEADERS, fetch_items
 
@@ -16,6 +17,7 @@ SUPABASE_URL = os.environ["SUPABASE_URL"].rstrip("/")
 SERVICE_KEY = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
 USER_ID = int(os.environ.get("VINTED_USER_ID", "271911480"))
 DETAIL_DELAY = float(os.environ.get("VINTED_DETAIL_DELAY_SECONDS", "1.0"))
+ARCHIVE_SOLD_SINCE = os.environ.get("STOREFRONT_ARCHIVE_SOLD_SINCE", "2026-08-01")
 
 
 def main():
@@ -44,15 +46,19 @@ def main():
             failures.append({"id": str(item["id"]), "error": str(error)})
         time.sleep(DETAIL_DELAY)
     upsert_storefront_records(SUPABASE_URL, SERVICE_KEY, records)
+    recovered, recovery_failures = recover_missing_recent_sales(
+        session, SUPABASE_URL, SERVICE_KEY, ARCHIVE_SOLD_SINCE,
+    )
     reconcile_storefront_availability(SUPABASE_URL, SERVICE_KEY, [item["id"] for item in catalog_items])
     dna_changed = reconcile_storefront_dna(SUPABASE_URL, SERVICE_KEY)
     sold_changed = reconcile_storefront_sales(SUPABASE_URL, SERVICE_KEY)
     published = sum(1 for record in records if record["published"])
-    print(f"Storefront sync: {len(records)} enriched, {published} publishable, {len(failures)} failed, {dna_changed} DNA rows updated, {sold_changed} sales reconciled")
-    for failure in failures[:10]:
+    all_failures = failures + recovery_failures
+    print(f"Storefront sync: {len(records)} enriched, {published} publishable, {len(recovered)} sold rows recovered, {len(all_failures)} failed, {dna_changed} DNA rows updated, {sold_changed} sales reconciled")
+    for failure in all_failures[:10]:
         print(f"Detail unavailable {failure['id']}: {failure['error']}")
-    if failures:
-        raise RuntimeError(f"Storefront detail sync incomplete for {len(failures)} current listing(s)")
+    if all_failures:
+        raise RuntimeError(f"Storefront detail sync incomplete for {len(all_failures)} listing(s)")
 
 
 if __name__ == "__main__":

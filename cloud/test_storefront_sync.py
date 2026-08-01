@@ -13,7 +13,7 @@ import storefront_sync as sf
 class FakeResponse:
     def __init__(self, status_code=200, payload=None, headers=None, text="", url="https://example.test"):
         self.status_code = status_code
-        self._payload = payload or {}
+        self._payload = payload if payload is not None else {}
         self.headers = headers or {}
         self.text = text
         self.url = url
@@ -119,6 +119,36 @@ Measurements (measured flat):
         record = sf.build_storefront_record(item)
         self.assertFalse(record["published"])
         self.assertIn("inseam", record["publication_notes"]["missing_measurements"])
+
+    def test_confirmed_recent_sale_can_recover_archive_card_from_sold_page(self):
+        detail = {
+            "id": 9320464487,
+            "title": "Levi's 615 Orangetab Vintage Jeans - W33 L32",
+            "photos": [{"url": "one.jpg"}, {"url": "two.jpg"}],
+            "price": {"amount": "189.00"},
+        }
+        ledger = {
+            "vinted_item_id": "9320464487",
+            "listing_url": "https://www.vinted.pl/items/9320464487",
+            "live_title": detail["title"],
+            "live_list_price": "189.00",
+            "sold_on": "2026-08-01",
+        }
+        record = sf.build_recovered_sold_record(detail, ledger, captured_at="2026-08-02T00:00:00+00:00")
+        self.assertTrue(record["published"])
+        self.assertTrue(record["sold"])
+        self.assertFalse(record["available"])
+        self.assertEqual(record["garment_type"], "JEANS")
+        self.assertEqual(record["sold_at"], "2026-08-01T00:00:00+00:00")
+        self.assertTrue(record["publication_notes"]["archive_recovery"])
+        self.assertFalse(record["publication_notes"]["description_recovered"])
+
+    @patch("storefront_sync.requests.get")
+    def test_recent_sale_query_has_explicit_archive_cutoff(self, get):
+        get.return_value = FakeResponse(payload=[])
+        self.assertEqual(sf.fetch_recent_sold_ledger_items("https://db.example/", "secret", "2026-08-01"), [])
+        self.assertEqual(get.call_args.kwargs["params"]["sold_on"], "gte.2026-08-01")
+        self.assertEqual(get.call_args.kwargs["params"]["ledger_status"], "eq.SOLD")
 
     @patch("storefront_sync.time.sleep")
     def test_transient_vinted_response_is_retried(self, sleep):
