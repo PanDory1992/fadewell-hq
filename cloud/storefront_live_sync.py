@@ -6,7 +6,7 @@ import cloudscraper
 import requests
 
 from storefront_sync import (
-    attach_catalog_path, build_storefront_record, fetch_catalog_paths,
+    attach_catalog_path, build_storefront_record, category_evidence, fetch_catalog_paths,
     fetch_user_catalog, fetch_vinted_detail, reconcile_storefront_availability,
     reconcile_storefront_sales, upsert_storefront_records,
 )
@@ -20,13 +20,25 @@ DETAIL_DELAY = float(os.environ.get("VINTED_DETAIL_DELAY_SECONDS", "0.35"))
 def main():
     session = cloudscraper.create_scraper()
     session.get("https://www.vinted.pl", timeout=30)
-    catalog_paths = fetch_catalog_paths(session)
     catalog_items = fetch_user_catalog(session, USER_ID)
+    try:
+        catalog_paths = fetch_catalog_paths(session)
+    except requests.HTTPError as error:
+        if error.response is None or error.response.status_code != 404:
+            raise
+        catalog_paths = {}
+        print("Vinted catalog tree endpoint is unavailable; using category evidence from item details")
     records, failures = [], []
     for item in catalog_items:
         try:
             detail = attach_catalog_path(fetch_vinted_detail(session, item), catalog_paths)
-            records.append(build_storefront_record(detail))
+            record = build_storefront_record(detail)
+            records.append(record)
+            if not record["garment_type"]:
+                print(
+                    f"Unresolved Vinted category for {item['id']}: "
+                    f"catalog_id={detail.get('catalog_id')!r}; evidence={category_evidence(detail)!r}"
+                )
         except (requests.RequestException, RuntimeError, ValueError) as error:
             failures.append({"id": str(item["id"]), "error": str(error)})
         time.sleep(DETAIL_DELAY)

@@ -31,13 +31,12 @@ detail or gallery failure cannot interrupt ledger snapshots or reconciliation.
   sold and moves it into the Pair Archive.
 - Published sold records are retained permanently.
 
-## Initial archive backfill
+## Archive start
 
-Run the `Backfill FADEWELL Storefront` workflow once after the migration and
-frontend are deployed. It attempts to enrich every current and historical
-Vinted listing referenced by HQ. The job fails visibly when Vinted no longer
-returns one or more historical detail pages; successfully enriched records are
-kept, while no missing facts are invented.
+There is no historical backfill. The Pair Archive starts with the storefront
+launch: the first sync records only listings available at launch, and a record
+moves into the archive only after HQ confirms that pair as sold later. This is
+intentional; old sold listings are not reconstructed from incomplete evidence.
 
 ## Verification
 
