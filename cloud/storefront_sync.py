@@ -106,10 +106,16 @@ def fetch_catalog_paths(session):
 
 
 def get_with_retry(session, url, *, attempts=4, **kwargs):
-    """Retry only transient Vinted responses, respecting Retry-After."""
+    """Retry transient Vinted responses and connection failures."""
     last_response = None
     for attempt in range(1, attempts + 1):
-        response = session.get(url, **kwargs)
+        try:
+            response = session.get(url, **kwargs)
+        except requests.RequestException:
+            if attempt >= attempts:
+                raise
+            time.sleep(min(2 ** attempt, 15))
+            continue
         last_response = response
         if response.status_code not in (429, 500, 502, 503, 504):
             response.raise_for_status()
