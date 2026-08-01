@@ -20,7 +20,7 @@ class FakeResponse:
 
     def raise_for_status(self):
         if self.status_code >= 400:
-            raise requests.HTTPError(f"HTTP {self.status_code}")
+            raise requests.HTTPError(f"HTTP {self.status_code}", response=self)
 
 
 class FakeSession:
@@ -91,6 +91,12 @@ Hips: 52 cm""")
         })])
         with self.assertRaisesRegex(RuntimeError, "mixed-seller"):
             sf.fetch_user_catalog(session, 123)
+
+    def test_http_error_retains_response_for_404_fallback(self):
+        response = FakeResponse(404)
+        with self.assertRaises(requests.HTTPError) as raised:
+            sf.get_with_retry(FakeSession([response]), "https://example.test/catalogs")
+        self.assertIs(raised.exception.response, response)
 
 
 if __name__ == "__main__":
