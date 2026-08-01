@@ -1,6 +1,8 @@
 """Build the public FADEWELL storefront record from Vinted-owned facts only."""
 from __future__ import annotations
 
+import html
+import json
 import re
 import time
 from datetime import datetime, timezone
@@ -19,7 +21,7 @@ MEASUREMENT_ALIASES = {
     "hips": ("hips", "hip", "biodra"),
 }
 ALLOWED_CATEGORY_WORDS = (
-    "jeans", "jeansy", "denim trousers", "spodnie jeansowe",
+    "jeans", "jeansy", "dzinsy", "denim trousers", "spodnie jeansowe",
     "trousers", "pants", "spodnie", "chinos", "cargo trousers", "cargo pants",
 )
 EXCLUDED_CATEGORY_WORDS = ("shorts", "szort", "skirt", "spodnic", "jumpsuit", "kombinezon")
@@ -163,7 +165,7 @@ def garment_type_from_vinted_category(item):
     evidence = _ascii(category_evidence(item))
     if not evidence or any(word in evidence for word in EXCLUDED_CATEGORY_WORDS):
         return None
-    if any(word in evidence for word in ("jeans", "jeansy", "spodnie jeansowe", "denim trousers")):
+    if any(word in evidence for word in ("jeans", "jeansy", "dzinsy", "spodnie jeansowe", "denim trousers")):
         return "JEANS"
     if any(word in evidence for word in ALLOWED_CATEGORY_WORDS):
         return "TROUSERS"
@@ -234,20 +236,88 @@ def _amount(value):
 def fetch_vinted_detail(session, item):
     """Enrich a catalog item from Vinted's public detail endpoint."""
     item_id = str(item["id"])
-    response = get_with_retry(
-        session,
-        f"https://www.vinted.pl/api/v2/items/{item_id}",
-        headers=VINTED_HEADERS,
-        timeout=30,
-    )
-    response.raise_for_status()
-    payload = response.json()
-    detail = payload.get("item") or payload
+    try:
+        response = get_with_retry(
+            session,
+            f"https://www.vinted.pl/api/v2/items/{item_id}",
+            headers=VINTED_HEADERS,
+            timeout=30,
+        )
+        payload = response.json()
+        detail = payload.get("item") or payload
+    except requests.HTTPError as error:
+        if error.response is None or error.response.status_code != 404:
+            raise
+        page = get_with_retry(
+            session,
+            f"https://www.vinted.pl/items/{item_id}",
+            headers={**VINTED_HEADERS, "Accept": "text/html,application/xhtml+xml"},
+            timeout=30,
+        )
+        detail = parse_vinted_item_page(page.text, item_id)
+        detail.setdefault("url", page.url)
     if str(detail.get("id")) != item_id:
         raise RuntimeError(f"Vinted detail identity mismatch for {item_id}")
     merged = dict(item)
     merged.update(detail)
     return merged
+
+
+def parse_vinted_item_page(page_html, expected_id):
+    """Read public Product JSON-LD and the pair's React flight record."""
+    expected_id = str(expected_id)
+    product = None
+    for block in re.findall(
+        r"<script[^>]*type=[\"']application/ld\+json[\"'][^>]*>(.*?)</script>",
+        str(page_html or ""),
+        re.I | re.S,
+    ):
+        try:
+            candidate = json.loads(html.unescape(block))
+        except (TypeError, ValueError):
+            continue
+        if isinstance(candidate, dict) and candidate.get("@type") == "Product":
+            product = candidate
+            break
+
+    flight_item = None
+    decoder = json.JSONDecoder()
+    for script_argument in re.findall(
+        r"<script>\s*self\.__next_f\.push\((\[.*?\])\)\s*</script>",
+        str(page_html or ""),
+        re.I | re.S,
+    ):
+        try:
+            frame = json.loads(script_argument)
+        except (TypeError, ValueError):
+            continue
+        if len(frame) < 2 or not isinstance(frame[1], str):
+            continue
+        match = re.search(rf'\{{"id":{re.escape(expected_id)},"seller_id":', frame[1])
+        if not match:
+            continue
+        try:
+            candidate, _ = decoder.raw_decode(frame[1][match.start():])
+        except (TypeError, ValueError):
+            continue
+        if str(candidate.get("id")) == expected_id:
+            flight_item = candidate
+            break
+
+    detail = dict(flight_item or {})
+    if product:
+        detail.setdefault("id", int(expected_id))
+        detail.setdefault("title", product.get("name"))
+        detail.setdefault("description", product.get("description"))
+        detail.setdefault("category", {"title": product.get("category")})
+        detail.setdefault("url", (product.get("offers") or {}).get("url"))
+        detail.setdefault("price", {"amount": (product.get("offers") or {}).get("price")})
+        if not detail.get("photos") and product.get("image"):
+            images = product["image"] if isinstance(product["image"], list) else [product["image"]]
+            detail["photos"] = [{"url": url} for url in images]
+    if not detail:
+        raise RuntimeError(f"No public product data found on Vinted item page {expected_id}")
+    return detail
 
 
 def upsert_storefront_records(supabase_url, service_key, records):
