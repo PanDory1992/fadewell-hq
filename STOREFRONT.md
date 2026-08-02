@@ -7,7 +7,9 @@ evidence, owner data, or other accounting fields.
 ## Data flow
 
 1. `.github/workflows/storefront-sync.yml` runs hourly and can also be started
-   manually.
+   manually. After a successful sync it dispatches `storefront-updated` to the
+   public site repository, which starts a build immediately. The site's hourly
+   schedule remains as a fallback.
 2. `cloud/storefront_live_sync.py` reads the complete live wardrobe and Vinted
    detail records.
 3. `cloud/storefront_sync.py` accepts only Vinted category evidence for the
@@ -18,6 +20,15 @@ evidence, owner data, or other accounting fields.
    all baseline measurements: waist, rise, inseam, leg opening, overall length.
 5. The website reads this table using the publishable key. All purchasing stays
    on Vinted.
+
+## Event-driven site build
+
+The HQ repository needs the `FADEWELL_SITE_DISPATCH_TOKEN` Actions secret. It
+should be a fine-grained GitHub token restricted to `PanDory1992/fadewell-site`
+with repository Contents read/write permission, used only to create a
+`repository_dispatch` event. If the secret is absent, the sync still succeeds
+and the site's hourly fallback continues; GitHub prints a warning in the sync
+run.
 
 The normal HQ Vinted collector is deliberately independent. A storefront
 detail or gallery failure cannot interrupt ledger snapshots or reconciliation.

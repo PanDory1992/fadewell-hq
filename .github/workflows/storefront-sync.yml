@@ -29,3 +29,15 @@ jobs:
           VINTED_USER_ID: '271911480'
           STOREFRONT_ARCHIVE_SOLD_SINCE: '2026-08-01'
         run: python cloud/storefront_live_sync.py
+      - name: Trigger public storefront build
+        if: ${{ success() }}
+        env:
+          GH_TOKEN: ${{ secrets.FADEWELL_SITE_DISPATCH_TOKEN }}
+          SITE_REPO: PanDory1992/fadewell-site
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::warning::FADEWELL_SITE_DISPATCH_TOKEN is not configured; the hourly storefront fallback remains active."
+            exit 0
+          fi
+          printf '{"event_type":"storefront-updated","client_payload":{"source_run_id":"%s"}}' "$GITHUB_RUN_ID" \
+            | gh api --method POST "repos/$SITE_REPO/dispatches" --input -
