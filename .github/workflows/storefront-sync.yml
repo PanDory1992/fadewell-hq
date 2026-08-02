@@ -31,6 +31,7 @@ jobs:
         run: python cloud/storefront_live_sync.py
       - name: Trigger public storefront build
         if: ${{ success() }}
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.FADEWELL_SITE_DISPATCH_TOKEN }}
           SITE_REPO: PanDory1992/fadewell-site
@@ -40,4 +41,5 @@ jobs:
             exit 0
           fi
           printf '{"event_type":"storefront-updated","client_payload":{"source_run_id":"%s"}}' "$GITHUB_RUN_ID" \
-            | gh api --method POST "repos/$SITE_REPO/dispatches" --input -
+            | gh api --method POST "repos/$SITE_REPO/dispatches" --input - \
+            || echo "::warning::Storefront dispatch failed; the hourly storefront fallback remains active."
