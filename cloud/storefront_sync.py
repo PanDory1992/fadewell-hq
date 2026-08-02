@@ -9,6 +9,8 @@ from datetime import datetime, timezone
 
 import requests
 
+ARCHIVE_HISTORY_FLOOR = "2026-08-01"
+
 
 REQUIRED_MEASUREMENTS = ("waist", "rise", "inseam", "leg_opening", "overall_length")
 MEASUREMENT_RANGES = {
@@ -385,6 +387,10 @@ def upsert_storefront_records(supabase_url, service_key, records):
 
 
 def fetch_recent_sold_ledger_items(supabase_url, service_key, sold_since):
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(sold_since or "")):
+        raise ValueError("archive cutoff must be an ISO date")
+    if sold_since < ARCHIVE_HISTORY_FLOOR:
+        raise ValueError(f"archive cutoff cannot predate {ARCHIVE_HISTORY_FLOOR}")
     response = requests.get(
         f"{supabase_url.rstrip('/')}/rest/v1/hq_ledger_items",
         headers={"apikey": service_key, "Authorization": f"Bearer {service_key}"},

@@ -43,6 +43,7 @@ p { margin: 8px 0; }
 nav { display: flex; flex-wrap: wrap; gap: 0; margin: 16px 0 12px; border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
 nav a { min-height: 40px; display: inline-flex; align-items: center; padding: 10px 12px 8px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); color: var(--muted); font: 500 11px/1 var(--label); letter-spacing: .09em; text-decoration: none; text-transform: uppercase; }
 nav .nav-money, nav .nav-stock, nav .nav-actions, nav .nav-system { border-left: 4px solid var(--bg); }
+nav .nav-growth { border-left: 4px solid var(--bg); }
 nav a:hover { background: var(--panel2); color: var(--ink); }
 nav a.active { background: var(--ink); color: var(--cream); }
 nav a:focus-visible, .text-link:focus-visible { outline: 2px solid var(--brown); outline-offset: -3px; }
@@ -156,3 +157,6 @@ dialog::backdrop { background: #24333d88; }
 
 @media (max-width: 780px) { main { padding: 28px 16px 44px; }.top { display: block; }.top .badge { margin-top: 12px; }.grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }.decision-overview { grid-template-columns: 1fr; }.split, .two-col { grid-template-columns: 1fr; }.hide-small { display: none; }.toolbar { align-items: stretch; flex-direction: column; }.toolbar input, .toolbar select { max-width: none; }.live-grid { grid-template-columns: 1fr; } nav .nav-money, nav .nav-stock, nav .nav-actions, nav .nav-system { border-left-width: 2px; } }
 @media (max-width: 420px) { .grid { grid-template-columns: 1fr; } th, td { padding: 9px 5px; font-size: 12px; } h1 { font-size: 47px; } nav a { width: 100%; } }
+
+.storefront-range{display:flex;gap:7px}.storefront-range button.active{background:var(--brown);border-color:var(--brown);color:#fff}.storefront-trend{display:grid;gap:8px}.trend-row{display:grid;grid-template-columns:46px minmax(120px,1fr) 92px;gap:9px;align-items:center;font-size:11px}.trend-row time{color:var(--muted)}.trend-row b{text-align:right;font:500 10px var(--label);letter-spacing:.04em}.trend-bars{display:grid;gap:2px}.trend-bars span{display:block;width:var(--w);min-width:2px;height:5px;background:var(--ink)}.trend-bars .pair{background:var(--brown)}.trend-bars .click{background:var(--green)}.storefront-pairs{margin-top:18px}.storefront-pairs .status.warning{color:var(--brown)}
+@media(max-width:780px){.storefront-range{margin-top:12px}.trend-row{grid-template-columns:40px minmax(100px,1fr) 78px}.storefront-pairs{padding:10px}}

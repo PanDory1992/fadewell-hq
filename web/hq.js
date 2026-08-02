@@ -19,7 +19,7 @@ const unpack=data=>({...data,linked:new Map(data.linked||[])});
 const changesSince=async cursor=>{const {data,error}=await sb.rpc('hq_browser_sync_changes_since',{p_after:Number(cursor||0)});if(error)throw error;return data||[]};
 const latestCursor=changes=>changes.length?Number(changes[changes.length-1].id):null;
 
-const pages=[['index.html','Dziś','today'],['operations.html','Sprawy','today'],['kpi.html','KPI','money'],['finance.html','Finanse','money'],['pricing.html','Ceny','money'],['ledger.html','Ledger','stock'],['wardrobe.html','Live wardrobe','stock'],['triage.html','Triage','stock'],['item-dna.html','Item DNA','stock'],['sourcing.html','Sourcing','stock'],['actions.html','Akcje','actions'],['system.html','System','system']];
+const pages=[['index.html','Dziś','today'],['operations.html','Sprawy','today'],['kpi.html','KPI','money'],['finance.html','Finanse','money'],['storefront.html','Storefront','growth'],['pricing.html','Ceny','money'],['ledger.html','Ledger','stock'],['wardrobe.html','Live wardrobe','stock'],['triage.html','Triage','stock'],['item-dna.html','Item DNA','stock'],['sourcing.html','Sourcing','stock'],['actions.html','Akcje','actions'],['system.html','System','system']];
 
 pages.splice(pages.findIndex(page=>page[0]==='kpi.html'),1);
 

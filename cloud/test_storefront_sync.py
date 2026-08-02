@@ -150,6 +150,10 @@ Measurements (measured flat):
         self.assertEqual(get.call_args.kwargs["params"]["sold_on"], "gte.2026-08-01")
         self.assertEqual(get.call_args.kwargs["params"]["ledger_status"], "eq.SOLD")
 
+    def test_archive_rejects_any_pre_august_backfill(self):
+        with self.assertRaisesRegex(ValueError, "cannot predate 2026-08-01"):
+            sf.fetch_recent_sold_ledger_items("https://db.example/", "secret", "2026-07-31")
+
     @patch("storefront_sync.time.sleep")
     def test_transient_vinted_response_is_retried(self, sleep):
         session = FakeSession([FakeResponse(429, headers={"Retry-After": "1"}), FakeResponse(200, {"ok": True})])
