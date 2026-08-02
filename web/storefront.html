@@ -9,8 +9,9 @@ let days=30;
 async function load(){
   $('status').textContent='Wczytuję anonimowe liczniki storefrontu…';
   const since=new Date(Date.now()-(days-1)*86400000).toISOString().slice(0,10);
-  const [{data:rows,error},{data:healthRows,error:healthError}]=await Promise.all([sb.from('fadewell_storefront_funnel_pairs').select('*').gte('event_date',since).order('event_date'),sb.from('fadewell_storefront_health').select('*').single()]);
+  const [{data:rows,error},{data:healthList,error:healthError}]=await Promise.all([sb.rpc('get_fadewell_storefront_dashboard',{p_since:since}),sb.rpc('get_fadewell_storefront_health')]);
   if(error||healthError)throw error||healthError;
+  const healthRows=healthList?.[0];if(!healthRows)throw new Error('Brak danych health storefrontu');
   const views=sum(rows,'page_view'),pairViews=sum(rows,'pair_view'),clicks=sum(rows,'vinted_click'),finderSubmits=sum(rows,'finder_submit'),finderClicks=sum(rows,'finder_result_click'),errors=sum(rows,'storefront_error');
   $('headline').innerHTML=[['Page views',views],['Pair views',pairViews],['Vinted clicks',clicks],['Pair → Vinted',pct(clicks,pairViews)],['Finder submits',finderSubmits],['Finder → Pair',pct(finderClicks,finderSubmits)],['Engaged 30 s',sum(rows,'engaged_view')],['Errors',errors]].map(([a,b])=>metric(a,b)).join('');
   const byDay=new Map();for(const row of rows){const day=byDay.get(row.event_date)||{views:0,pairs:0,clicks:0};if(row.event_type==='page_view')day.views+=Number(row.events);if(row.event_type==='pair_view')day.pairs+=Number(row.events);if(row.event_type==='vinted_click')day.clicks+=Number(row.events);byDay.set(row.event_date,day)}const max=Math.max(1,...[...byDay.values()].map(day=>day.views));

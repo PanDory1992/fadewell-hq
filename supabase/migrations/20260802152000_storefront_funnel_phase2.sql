@@ -74,7 +74,6 @@ left join public.fadewell_storefront_products p on p.vinted_item_id=c.vinted_ite
 group by c.event_date,c.event_type,c.source_page,c.vinted_item_id,p.title,p.available,p.sold;
 
 revoke all on public.fadewell_storefront_funnel_pairs from public,anon,authenticated;
-grant select on public.fadewell_storefront_funnel_pairs to authenticated;
 
 create or replace view public.fadewell_storefront_health
 with (security_invoker=true) as
@@ -86,7 +85,70 @@ select count(*) filter (where published)::bigint as published_pairs,
 from public.fadewell_storefront_products;
 
 revoke all on public.fadewell_storefront_health from public,anon,authenticated;
-grant select on public.fadewell_storefront_health to authenticated;
 
 comment on view public.fadewell_storefront_funnel_pairs is
 'Owner-only aggregate storefront funnel by day and pair; no visitor identifiers.';
+
+-- Dashboard reads are owner-gated RPCs.  The views above stay ungranted: this
+-- keeps raw counters and product metadata unavailable to general signed-in users.
+create or replace function public.get_fadewell_storefront_dashboard(
+  p_since date default current_date - 29
+)
+returns table (
+  event_date date,
+  event_type text,
+  source_page text,
+  vinted_item_id text,
+  title text,
+  available boolean,
+  sold boolean,
+  events bigint,
+  last_event_at timestamptz
+)
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if not public.is_hq_owner() then raise exception 'HQ owner access required'; end if;
+  return query
+  select c.event_date,c.event_type,c.source_page,c.vinted_item_id,
+         p.title,p.available,p.sold,sum(c.event_count)::bigint,max(c.last_event_at)
+  from public.fadewell_storefront_event_counts c
+  left join public.fadewell_storefront_products p on p.vinted_item_id=c.vinted_item_id
+  where c.event_date >= greatest(coalesce(p_since,current_date-29),current_date-365)
+  group by c.event_date,c.event_type,c.source_page,c.vinted_item_id,p.title,p.available,p.sold
+  order by c.event_date;
+end;
+$$;
+
+create or replace function public.get_fadewell_storefront_health()
+returns table (
+  published_pairs bigint,
+  available_pairs bigint,
+  archived_pairs bigint,
+  latest_pair_update timestamptz,
+  missing_descriptions bigint
+)
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if not public.is_hq_owner() then raise exception 'HQ owner access required'; end if;
+  return query
+  select count(*) filter (where published)::bigint,
+         count(*) filter (where published and available and not sold)::bigint,
+         count(*) filter (where published and sold)::bigint,
+         max(updated_at) filter (where published),
+         count(*) filter (where published and nullif(btrim(description_raw),'') is null)::bigint
+  from public.fadewell_storefront_products;
+end;
+$$;
+
+revoke all on function public.get_fadewell_storefront_dashboard(date)
+from public, anon, authenticated;
+grant execute on function public.get_fadewell_storefront_dashboard(date) to authenticated;
+revoke all on function public.get_fadewell_storefront_health()
+from public, anon, authenticated;
+grant execute on function public.get_fadewell_storefront_health() to authenticated;
