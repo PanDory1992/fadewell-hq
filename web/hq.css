@@ -95,7 +95,7 @@ tr:last-child td { border-bottom: 0; }
 .text-link { color: var(--brown); font-weight: 700; text-decoration: none; }
 .text-link:hover { color: var(--ink); text-decoration: underline; }
 .status { display: inline-flex; border: 1px solid currentColor; border-radius: 0; padding: 4px 6px 3px; color: var(--muted); font: 600 10px/1 var(--label); letter-spacing: .1em; text-transform: uppercase; }
-.status.listed { color: var(--blue); }.status.sold { color: var(--green); }.status.unlisted { color: var(--brown); }.status.warning { color: var(--red); }
+.status.listed { color: var(--blue); }.status.sold { color: var(--green); }.status.unlisted { color: var(--brown); }.status.voided { color: var(--muted); text-decoration: line-through; }.status.warning { color: var(--red); }
 .empty { padding: 30px 12px; color: var(--muted); text-align: center; }
 .ok { color: var(--green); }.bad { color: var(--red); }
 .notice { margin: 14px 0; border: 1px solid #8f603f77; border-left: 4px solid var(--brown); border-radius: 0; background: #f2e8d7; padding: 11px 12px; color: var(--ink); }
