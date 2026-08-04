@@ -122,6 +122,6 @@ export async function data(){
   const changes=await changesSince(0).catch(()=>[]),next=await loadData();await cachePut({data:pack(next),cursor:latestCursor(changes)||0,savedAt:Date.now()});return next;
 }
 
-export const statusClass=status=>status==='SOLD'?'sold':status==='LISTED-BACKLOG'?'listed':'unlisted';
-export const statusLabel=status=>status==='LISTED-BACKLOG'?'Wystawione':status==='UNLISTED-BACKLOG'?'Do wystawienia':status==='SOLD'?'Sprzedane':status||'—';
+export const statusClass=status=>status==='SOLD'?'sold':status==='LISTED-BACKLOG'?'listed':status==='VOIDED'?'voided':'unlisted';
+export const statusLabel=status=>status==='LISTED-BACKLOG'?'Wystawione':status==='UNLISTED-BACKLOG'?'Do wystawienia':status==='SOLD'?'Sprzedane':status==='VOIDED'?'Anulowane':status||'—';
 export function itemPhoto(item,snapshots){const snapshot=snapshots?.find(row=>String(row.vinted_item_id)===String(item.vinted_item_id));return snapshot?.photo_url||item.last_photo_url||'';}
