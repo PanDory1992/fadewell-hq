@@ -9,7 +9,7 @@ export const money=value=>{if(value===null||value===undefined||value==='')return
 export const date=value=>value?new Intl.DateTimeFormat('pl-PL',{dateStyle:'medium'}).format(new Date(value)): '—';
 export const pendingExternalReviews=events=>(events||[]).filter(event=>event.state==='NEEDS_REVIEW');
 export const toast=message=>{const el=document.createElement('div');el.className='toast';el.textContent=message;document.body.append(el);setTimeout(()=>el.remove(),2600)};
-const cacheKey='fadewell-hq-data-v3',cacheMaxAgeMs=2*60*60*1000;
+const cacheKey='fadewell-hq-data-v4',cacheMaxAgeMs=2*60*60*1000;
 const cacheOpen=()=>new Promise((resolve,reject)=>{const request=indexedDB.open('fadewell-hq',2);request.onupgradeneeded=()=>{const db=request.result;if(db.objectStoreNames.contains('cache'))db.deleteObjectStore('cache');db.createObjectStore('cache')};request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)});
 const cacheDelete=async()=>{try{const db=await cacheOpen();await new Promise(resolve=>{const request=db.transaction('cache','readwrite').objectStore('cache').clear();request.onsuccess=request.onerror=resolve})}catch{}};
 const cacheGet=async()=>{try{const db=await cacheOpen();const cached=await new Promise(resolve=>{const request=db.transaction('cache').objectStore('cache').get(cacheKey);request.onsuccess=()=>resolve(request.result||null);request.onerror=()=>resolve(null)});if(cached?.savedAt&&Date.now()-cached.savedAt>cacheMaxAgeMs){await cacheDelete();return null}return cached}catch{return null}};
