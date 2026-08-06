@@ -47,8 +47,18 @@ function renderDecisionOverview(){const mails=(state?.gmailEvents||[]).length+(s
 let activityExpanded=false;
 function renderActionFocus(){const pairs=relistPairsForState(),pairedListings=new Set(pairs.map(pair=>String(pair.row.vinted_item_id))),pairedItems=new Set(pairs.map(pair=>pair.item.item_id)),lanes=[['gmail',((state?.gmailEvents||[]).length+(state?.transactionExceptions||[]).filter(row=>row.exception_type!=='GMAIL_REVIEW').length)],['listings',(state?.snapshots||[]).filter(row=>!state.linked.has(String(row.vinted_item_id))&&!pairedListings.has(String(row.vinted_item_id))).length],['reviews',pairs.length+(state?.missing||[]).filter(item=>!pairedItems.has(item.item_id)).length+(state?.reviews||[]).length]];lanes.forEach(([id,count])=>document.getElementById(id)?.classList.toggle('needs-decision',count>0));const feed=document.getElementById('activity'),entries=[...feed.querySelectorAll('.feed-item')],limit=6;if(entries.length<=limit)return;entries.slice(limit).forEach(entry=>entry.hidden=!activityExpanded);const toggle=document.createElement('button');toggle.type='button';toggle.className='secondary activity-toggle';toggle.textContent=activityExpanded?`Zwiń historię (${entries.length-limit})`:`Pokaż starsze zdarzenia (${entries.length-limit})`;toggle.onclick=()=>{activityExpanded=!activityExpanded;renderActionFocus();};feed.append(toggle);}
 const renderBase=render;render=()=>{renderBase();renderGmail();renderDecisionOverview();renderActionFocus();unlinked.querySelectorAll('select[data-den]').forEach(select=>[...select.options].forEach(option=>{const item=state.items.find(candidate=>candidate.item_id===option.value);if(option.value&&item?.ledger_status!=='UNLISTED-BACKLOG'&&!isMissing(item))option.remove()}));};
-// --- Storefront pairs without clicks (Sprawdź kartę) ---
+// --- Storefront pairs bez kliknięć (Sprawdź kartę) ---
 async function loadStorefrontPairs(){
+  // Create the section dynamically if not present
+  let section=document.getElementById('storefront-pairs');
+  if(!section){
+    section=document.createElement('section');
+    section.id='storefront-pairs';
+    section.className='lane';
+    section.innerHTML='<h2>Pary bez kliknięć do Vinted <span id="storefrontPairsCount" class="muted small"></span></h2><div id="storefrontPairsCards" class="stack"></div>';
+    const main=document.querySelector('main');
+    if(main)main.appendChild(section);
+  }
   const el=document.getElementById('storefrontPairsCards');
   const countEl=document.getElementById('storefrontPairsCount');
   if(!el)return;
@@ -57,7 +67,7 @@ async function loadStorefrontPairs(){
     const{data:rows,error}=await sb.rpc('get_fadewell_storefront_dashboard',{p_since:since});
     if(error)throw error;
     const pairMap=new Map();
-    for(const row of (rows||[]).filter(r=>r.vinted_item_id)){
+    for(const row of(rows||[]).filter(r=>r.vinted_item_id)){
       const item=pairMap.get(row.vinted_item_id)||{id:row.vinted_item_id,title:row.title||row.vinted_item_id,views:0,clicks:0};
       if(row.event_type==='pair_view')item.views+=Number(row.events);
       if(row.event_type==='vinted_click')item.clicks+=Number(row.events);
@@ -65,25 +75,22 @@ async function loadStorefrontPairs(){
     }
     const flagged=[...pairMap.values()].filter(item=>item.views>=3&&!item.clicks).sort((a,b)=>b.views-a.views);
     countEl.textContent=flagged.length?flagged.length+' par do sprawdzenia':'';
-    document.getElementById('storefront-pairs')?.classList.toggle('needs-decision',flagged.length>0);
-    el.innerHTML=flagged.length
-      ?flagged.map(item=>`<article class="card queue-card">
-        <div class="row-actions">
-          <span class="status warning">Bez kliknięcia do Vinted</span>
-          <span class="muted small">${safe(item.views)} odsłon · 0 kliknięć</span>
-        </div>
-        <h3>${safe(item.title)}</h3>
-        <p class="muted small">Para File ma ruch, ale nikt nie kliknął do Vinted. Sprawdź opis, cenę i zdjęcia na karcie.</p>
-        <div class="row-actions">
-          <a class="secondary" href="https://fadewell.eu/pairs/${safe(item.id)}/" target="_blank" rel="noopener">Otwórz kartę Storefront →</a>
-          <a class="secondary" href="https://www.vinted.pl/items/${safe(item.id)}" target="_blank" rel="noopener">Otwórz Vinted →</a>
-        </div>
-      </article>`).join('')
-      :'<article class="card empty"><b class="ok">✓ Wszystkie pary z ruchem mają kliknięcia do Vinted.</b></article>';
-    // Update decision count to include storefront pairs
-    const decisionEl=$('decisionCount');
-    if(decisionEl&&flagged.length){const cur=parseInt(decisionEl.textContent)||0;decisionEl.textContent=`${cur+flagged.length} spraw do rozstrzygnięcia`;}
-  }catch(e){el.innerHTML='<p class="bad">Nie udało się załadować danych storefrontu: '+safe(e.message||e)+'</p>';}
+    if(!flagged.length){section.hidden=true;return;}
+    section.hidden=false;
+    section.classList.add('needs-decision');
+    el.innerHTML=flagged.map(item=>`<article class="card queue-card">
+      <div class="row-actions">
+        <span class="status warning">Bez kliknięcia do Vinted</span>
+        <span class="muted small">${safe(item.views)} odsłon · 0 kliknięć</span>
+      </div>
+      <h3>${safe(item.title)}</h3>
+      <p class="muted small">Karta storefront ma ruch, ale nikt nie kliknął do Vinted. Sprawdź opis, cenę i zdjęcia.</p>
+      <div class="row-actions" style="gap:8px;margin-top:8px">
+        <a class="button secondary" href="https://fadewell.eu/pairs/${safe(item.id)}/" target="_blank" rel="noopener">Otwórz kartę storefront →</a>
+        <a class="button secondary" href="https://www.vinted.pl/items/${safe(item.id)}" target="_blank" rel="noopener">Otwórz Vinted →</a>
+      </div>
+    </article>`).join('');
+  }catch(e){if(el)el.innerHTML='<p class="bad">Błąd ładowania danych: '+safe(e.message||String(e))+'</p>';}
 }
 if(state)render();loadStorefrontPairs();document.addEventListener('hq:data-refreshed',async()=>{try{state=await data();render();}catch{}},{once:true});
 </script></html>
