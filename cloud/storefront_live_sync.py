@@ -53,8 +53,20 @@ def main():
     dna_changed = reconcile_storefront_dna(SUPABASE_URL, SERVICE_KEY)
     sold_changed = reconcile_storefront_sales(SUPABASE_URL, SERVICE_KEY)
     published = sum(1 for record in records if record["published"])
+    action_required = sum(
+        1 for record in records
+        if record["available"]
+        and not record["published"]
+        and record["publication_notes"].get("publication_status") not in {
+            "OUT_OF_SCOPE_CATEGORY", "NO_CATEGORY_EVIDENCE",
+        }
+    )
+    out_of_scope = sum(
+        1 for record in records
+        if record["available"] and record["publication_notes"].get("publication_status") == "OUT_OF_SCOPE_CATEGORY"
+    )
     all_failures = failures + recovery_failures
-    print(f"Storefront sync: {len(records)} enriched, {published} publishable, {len(recovered)} sold rows recovered, {len(all_failures)} failed, {dna_changed} DNA rows updated, {sold_changed} sales reconciled")
+    print(f"Storefront sync: {len(records)} enriched, {published} publishable, {action_required} action-required, {out_of_scope} out-of-scope, {len(recovered)} sold rows recovered, {len(all_failures)} failed, {dna_changed} DNA rows updated, {sold_changed} sales reconciled")
     for failure in all_failures[:10]:
         print(f"Detail unavailable {failure['id']}: {failure['error']}")
     if all_failures:

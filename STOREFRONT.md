@@ -18,6 +18,10 @@ evidence, owner data, or other accounting fields.
 4. Supabase RLS exposes only rows with `published = true`. A row is publishable
    only with an allowed Vinted category, at least one photo, a description, and
    all baseline measurements: waist, rise, inseam, leg opening, overall length.
+   Incomplete rows remain private but are classified in `publication_notes`;
+   the owner-only health/completeness RPCs surface action-required records and
+   keep out-of-scope Vinted categories separate from measurement work. Explicit
+   measurement ranges retain their source display and numeric bounds.
 5. The website reads this table using the publishable key. All purchasing stays
    on Vinted.
 

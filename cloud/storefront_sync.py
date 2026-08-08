@@ -23,7 +23,7 @@ MEASUREMENT_ALIASES = {
     "rise": ("front rise", "rise", "stan"),
     "inseam": ("inseam", "inside leg", "wewnetrzna nogawka", "nogawka wewnetrzna"),
     "leg_opening": ("leg opening", "hem", "otwor nogawki", "nogawka na dole"),
-    "overall_length": ("overall length", "outseam", "total length", "dlugosc calkowita"),
+    "overall_length": ("overall length", "full length", "outseam", "total length", "length", "dlugosc calkowita"),
     "thigh": ("thigh", "udo"),
     "hips": ("hips", "hip", "biodra"),
 }
@@ -45,7 +45,7 @@ def _ascii(value):
     return str(value or "").translate(table).lower().strip()
 
 
-def extract_measurements(description):
+def _legacy_extract_measurements(description):
     """Extract the value beside each label, never an earlier model/year number."""
     measurements = {}
     text = _ascii(description)
@@ -66,6 +66,105 @@ def extract_measurements(description):
                     measurements[key] = {"cm": value, "display": f"{value:g} cm"}
                     break
     return measurements
+
+
+MEASUREMENT_VALUE_PATTERN = (
+    r"(?P<first>\d{1,3}(?:[.,]\d{1,2})?)"
+    r"(?:\s*(?:-|\u2013|\u2014|/)\s*"
+    r"(?P<second>\d{1,3}(?:[.,]\d{1,2})?))?\s*cm\b"
+)
+PHOTO_ONLY_PATTERN = re.compile(
+    r"\bmeasurements?\b.{0,60}\b(?:photo|photos|gallery|zdjec)\b", re.IGNORECASE | re.DOTALL,
+)
+
+
+def _measurement_number(value):
+    return float(str(value).replace(",", "."))
+
+
+def _measurement_value(match):
+    first = _measurement_number(match.group("first"))
+    second = match.group("second")
+    if second is None:
+        low = high = first
+        display = f"{first:g} cm"
+    else:
+        second = _measurement_number(second)
+        low, high = sorted((first, second))
+        display = f"{first:g}\u2013{second:g} cm"
+    return low, high, display
+
+
+def extract_measurements(description):
+    """Extract exact values and explicit ranges beside measurement labels."""
+    measurements = {}
+    text = _ascii(description)
+    for key, aliases in MEASUREMENT_ALIASES.items():
+        for alias in aliases:
+            patterns = (
+                rf"\b{re.escape(alias)}\b\s*[:\-\u2013\u2014]\s*{MEASUREMENT_VALUE_PATTERN}",
+                rf"(?:^|[\n\u2022*|])\s*{re.escape(alias)}\b[^\w\d\n]{{0,12}}{MEASUREMENT_VALUE_PATTERN}",
+                rf"(?<!\w){re.escape(alias)}\b[ \t]{{1,12}}{MEASUREMENT_VALUE_PATTERN}",
+            )
+            match = None
+            for pattern in patterns:
+                match = re.search(pattern, text, re.MULTILINE | re.IGNORECASE)
+                if match:
+                    break
+            if not match:
+                continue
+            low, high, display = _measurement_value(match)
+            allowed_low, allowed_high = MEASUREMENT_RANGES[key]
+            if allowed_low <= low <= allowed_high and allowed_low <= high <= allowed_high:
+                measurements[key] = {
+                    "cm": round((low + high) / 2, 2),
+                    "min_cm": low,
+                    "max_cm": high,
+                    "display": display,
+                }
+                break
+    return measurements
+
+
+def measurement_issue_by_field(description, measurements):
+    """Explain missing measurements without guessing whether a source is wrong."""
+    text = _ascii(description)
+    photo_only = bool(PHOTO_ONLY_PATTERN.search(text))
+    issues = {}
+    for key in REQUIRED_MEASUREMENTS:
+        if key in measurements:
+            continue
+        aliases = MEASUREMENT_ALIASES[key]
+        label_present = any(re.search(rf"\b{re.escape(alias)}\b", text) for alias in aliases)
+        issues[key] = "PHOTO_ONLY" if photo_only else "UNPARSED_LABEL" if label_present else "SOURCE_VALUE_MISSING"
+    return issues
+
+
+def publication_notes(description, category, garment_type, photos, measurements, publishable):
+    missing = [key for key in REQUIRED_MEASUREMENTS if key not in measurements]
+    notes = {"missing_measurements": missing, "has_category": bool(garment_type)}
+    reasons = []
+    if not garment_type:
+        reasons.append("NO_CATEGORY_EVIDENCE" if not category else "OUT_OF_SCOPE_CATEGORY")
+    elif missing:
+        issue_by_field = measurement_issue_by_field(description, measurements)
+        notes["measurement_issues"] = issue_by_field
+        reasons.extend(dict.fromkeys(issue_by_field.values()))
+    if garment_type and not description:
+        reasons.append("NO_DESCRIPTION")
+    if garment_type and not photos:
+        reasons.append("NO_PHOTOS")
+    notes["blocking_reasons"] = list(dict.fromkeys(reasons))
+    notes["publication_status"] = "PUBLISHED" if publishable else (
+        "NEEDS_MEASUREMENT_REVIEW" if garment_type and missing else (
+            "NO_DESCRIPTION" if garment_type and not description else (
+                "NO_PHOTOS" if garment_type and not photos else (
+                    "NO_CATEGORY_EVIDENCE" if not category else "OUT_OF_SCOPE_CATEGORY"
+                )
+            )
+        )
+    )
+    return notes
 
 
 def category_evidence(item):
@@ -240,7 +339,14 @@ def build_storefront_record(item, captured_at=None, sold=False):
         "published": publishable,
         "last_seen_at": now,
         "updated_at": now,
-        "publication_notes": {"missing_measurements": missing, "has_category": bool(garment_type)},
+        "publication_notes": publication_notes(
+            description,
+            category_evidence(item),
+            garment_type,
+            photos,
+            measurements,
+            publishable,
+        ),
     }
 
 

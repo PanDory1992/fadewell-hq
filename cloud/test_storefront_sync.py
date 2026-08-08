@@ -61,6 +61,37 @@ Hips: 52 cm""")
         self.assertEqual(result["rise"]["cm"], 30)
         self.assertEqual(result["leg_opening"]["cm"], 17.5)
 
+    def test_measurement_ranges_and_plain_labels_are_preserved(self):
+        result = sf.extract_measurements("Waist: 39\u201341 cm\nRise          29 cm\nLength: 106 cm")
+        self.assertEqual(result["waist"]["cm"], 40)
+        self.assertEqual(result["waist"]["min_cm"], 39)
+        self.assertEqual(result["waist"]["max_cm"], 41)
+        self.assertEqual(result["waist"]["display"], "39\u201341 cm")
+        self.assertEqual(result["rise"]["cm"], 29)
+        self.assertEqual(result["overall_length"]["cm"], 106)
+
+    def test_photo_only_measurements_are_a_visible_review_reason(self):
+        record = sf.build_storefront_record({
+            "id": 8130234003,
+            "catalog": {"title": "Jeans"},
+            "description": "Measurements in photo gallery.",
+            "photos": [{"url": "https://img.example/big-star.jpg"}],
+        })
+        self.assertFalse(record["published"])
+        self.assertEqual(record["publication_notes"]["publication_status"], "NEEDS_MEASUREMENT_REVIEW")
+        self.assertEqual(set(record["publication_notes"]["measurement_issues"].values()), {"PHOTO_ONLY"})
+
+    def test_non_denim_category_is_excluded_without_becoming_measurement_work(self):
+        record = sf.build_storefront_record({
+            "id": 900,
+            "catalog": {"title": "Men's shirts"},
+            "description": "Waist: 40 cm",
+            "photos": [{"url": "https://img.example/shirt.jpg"}],
+        })
+        self.assertFalse(record["published"])
+        self.assertEqual(record["publication_notes"]["publication_status"], "OUT_OF_SCOPE_CATEGORY")
+        self.assertNotIn("measurement_issues", record["publication_notes"])
+
     def test_implausible_model_number_is_not_a_measurement(self):
         result = sf.extract_measurements("High-rise Levi's 501 jeans. Rise: 28 cm")
         self.assertEqual(result["rise"]["cm"], 28)
