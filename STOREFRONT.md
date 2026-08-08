@@ -20,8 +20,11 @@ evidence, owner data, or other accounting fields.
    all baseline measurements: waist, rise, inseam, leg opening, overall length.
    Incomplete rows remain private but are classified in `publication_notes`;
    the owner-only health/completeness RPCs surface action-required records and
-   keep out-of-scope Vinted categories separate from measurement work. Explicit
-   measurement ranges retain their source display and numeric bounds.
+   keep out-of-scope Vinted categories and operationally excluded non-DEN
+   listings separate from measurement work. Explicit measurement ranges retain
+   their source display and numeric bounds. The shared `operational_scope.json`
+   exclusion list is applied by storefront sync, so a non-DEN listing cannot be
+   republished merely because its Vinted category and measurements look complete.
 5. The website reads this table using the publishable key. All purchasing stays
    on Vinted.
 

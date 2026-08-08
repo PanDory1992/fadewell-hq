@@ -9,7 +9,7 @@ from storefront_sync import (
     attach_catalog_path, build_storefront_record, category_evidence, fetch_catalog_paths,
     fetch_vinted_detail, reconcile_storefront_availability,
     reconcile_storefront_dna, reconcile_storefront_sales, recover_missing_recent_sales,
-    upsert_storefront_records,
+    is_den_scope_excluded, upsert_storefront_records,
 )
 from vinted_snapshot_sync import HEADERS, fetch_items
 
@@ -35,9 +35,12 @@ def main():
     for item in catalog_items:
         try:
             detail = attach_catalog_path(fetch_vinted_detail(session, item), catalog_paths)
-            record = build_storefront_record(detail)
+            scope_excluded = is_den_scope_excluded(item["id"])
+            record = build_storefront_record(detail, scope_excluded=scope_excluded)
             records.append(record)
-            if not record["garment_type"]:
+            if scope_excluded and record["garment_type"]:
+                print(f"Excluded from DEN storefront scope: {item['id']} — {record['title']}")
+            elif not record["garment_type"]:
                 print(
                     f"Unresolved Vinted category for {item['id']}: "
                     f"catalog_id={detail.get('catalog_id')!r}; evidence={category_evidence(detail)!r}"
@@ -58,12 +61,14 @@ def main():
         if record["available"]
         and not record["published"]
         and record["publication_notes"].get("publication_status") not in {
-            "OUT_OF_SCOPE_CATEGORY", "NO_CATEGORY_EVIDENCE",
+            "OUT_OF_SCOPE_CATEGORY", "NO_CATEGORY_EVIDENCE", "OUT_OF_SCOPE_DEN",
         }
     )
     out_of_scope = sum(
         1 for record in records
-        if record["available"] and record["publication_notes"].get("publication_status") == "OUT_OF_SCOPE_CATEGORY"
+        if record["available"] and record["publication_notes"].get("publication_status") in {
+            "OUT_OF_SCOPE_CATEGORY", "OUT_OF_SCOPE_DEN",
+        }
     )
     all_failures = failures + recovery_failures
     print(f"Storefront sync: {len(records)} enriched, {published} publishable, {action_required} action-required, {out_of_scope} out-of-scope, {len(recovered)} sold rows recovered, {len(all_failures)} failed, {dna_changed} DNA rows updated, {sold_changed} sales reconciled")

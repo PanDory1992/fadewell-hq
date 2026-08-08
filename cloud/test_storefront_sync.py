@@ -81,6 +81,23 @@ Hips: 52 cm""")
         self.assertEqual(record["publication_notes"]["publication_status"], "NEEDS_MEASUREMENT_REVIEW")
         self.assertEqual(set(record["publication_notes"]["measurement_issues"].values()), {"PHOTO_ONLY"})
 
+    def test_non_den_scope_is_excluded_without_becoming_measurement_work(self):
+        record = sf.build_storefront_record({
+            "id": 8130234003,
+            "catalog": {"title": "Jeans"},
+            "description": "Waist 42 cm\nRise 30 cm\nInseam 80 cm\nLeg opening 20 cm\nOverall length 106 cm",
+            "photos": [{"url": "https://img.example/big-star.jpg"}],
+        }, scope_excluded=True)
+        self.assertFalse(record["published"])
+        self.assertEqual(record["publication_notes"]["publication_status"], "OUT_OF_SCOPE_DEN")
+        self.assertEqual(record["publication_notes"]["blocking_reasons"], ["NOT_IN_DEN_SCOPE"])
+        self.assertEqual(record["publication_notes"]["missing_measurements"], [])
+        self.assertNotIn("measurement_issues", record["publication_notes"])
+
+    def test_operational_scope_contains_confirmed_non_den_listings(self):
+        self.assertTrue(sf.is_den_scope_excluded("7990892108"))
+        self.assertTrue(sf.is_den_scope_excluded("8130234003"))
+
     def test_non_denim_category_is_excluded_without_becoming_measurement_work(self):
         record = sf.build_storefront_record({
             "id": 900,

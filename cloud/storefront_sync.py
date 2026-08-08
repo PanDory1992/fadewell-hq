@@ -6,10 +6,16 @@ import json
 import re
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 
 import requests
 
 ARCHIVE_HISTORY_FLOOR = "2026-08-01"
+ROOT = Path(__file__).resolve().parents[1]
+OPERATIONAL_SCOPE = json.loads((ROOT / "operational_scope.json").read_text(encoding="utf-8"))
+EXCLUDED_LIVE_VINTED_IDS = frozenset(
+    str(item_id) for item_id in OPERATIONAL_SCOPE.get("excluded_live_vinted_ids", [])
+)
 
 
 REQUIRED_MEASUREMENTS = ("waist", "rise", "inseam", "leg_opening", "overall_length")
@@ -43,6 +49,11 @@ VINTED_HEADERS = {
 def _ascii(value):
     table = str.maketrans("ąćęłńóśźżĄĆĘŁŃÓŚŹŻ", "acelnoszzACELNOSZZ")
     return str(value or "").translate(table).lower().strip()
+
+
+def is_den_scope_excluded(vinted_item_id):
+    """Return whether the current operational scope excludes this listing from DEN."""
+    return str(vinted_item_id or "") in EXCLUDED_LIVE_VINTED_IDS
 
 
 def _legacy_extract_measurements(description):
@@ -140,9 +151,19 @@ def measurement_issue_by_field(description, measurements):
     return issues
 
 
-def publication_notes(description, category, garment_type, photos, measurements, publishable):
+def publication_notes(
+    description, category, garment_type, photos, measurements, publishable,
+    scope_excluded=False,
+):
     missing = [key for key in REQUIRED_MEASUREMENTS if key not in measurements]
     notes = {"missing_measurements": missing, "has_category": bool(garment_type)}
+    if scope_excluded and garment_type:
+        return {
+            "missing_measurements": [],
+            "has_category": True,
+            "blocking_reasons": ["NOT_IN_DEN_SCOPE"],
+            "publication_status": "OUT_OF_SCOPE_DEN",
+        }
     reasons = []
     if not garment_type:
         reasons.append("NO_CATEGORY_EVIDENCE" if not category else "OUT_OF_SCOPE_CATEGORY")
@@ -313,14 +334,14 @@ def _label(item, key, fallback=None):
     return str(value or fallback or "").strip() or None
 
 
-def build_storefront_record(item, captured_at=None, sold=False):
+def build_storefront_record(item, captured_at=None, sold=False, scope_excluded=False):
     description = str(item.get("description") or "").strip()
     measurements = extract_measurements(description)
     garment_type = garment_type_from_vinted_category(item)
     photos = photo_urls(item)
     now = captured_at or datetime.now(timezone.utc).isoformat()
     missing = [key for key in REQUIRED_MEASUREMENTS if key not in measurements]
-    publishable = bool(garment_type and description and photos and not missing)
+    publishable = bool(garment_type and description and photos and not missing and not scope_excluded)
     return {
         "vinted_item_id": str(item["id"]),
         "title": _label(item, "title"),
@@ -346,6 +367,7 @@ def build_storefront_record(item, captured_at=None, sold=False):
             photos,
             measurements,
             publishable,
+            scope_excluded=scope_excluded,
         ),
     }
 
