@@ -48,14 +48,15 @@ export async function shell(active){
 
 async function loadData(){
   const status=$('status');if(status)status.textContent='Wczytuję podstawowe dane HQ…';
-  const [{data:ledgerItems,error:ledgerError},{data:legacyItems,error:legacyError},{data:snapshots,error:snapshotsError},{data:reviews,error:reviewsError},{data:events,error:eventsError}]=await Promise.all([
+  const [{data:ledgerItems,error:ledgerError},{data:legacyItems,error:legacyError},{data:snapshots,error:snapshotsError},{data:reviews,error:reviewsError},{data:events,error:eventsError},{data:relistCandidates,error:relistCandidatesError}]=await Promise.all([
     sb.from('hq_ledger_items').select('*').order('item_id'),
     sb.from('hq_items').select('*').order('item_id'),
     sb.from('hq_listing_snapshots').select('*').order('captured_at',{ascending:false}).limit(800),
     sb.from('hq_review_queue').select('*').eq('state','OPEN').order('created_at',{ascending:false}),
-    sb.from('hq_ledger_events').select('item_id,event_type,occurred_on,amount,detail,source,created_at,external_key').order('created_at',{ascending:false}).limit(30)
+    sb.from('hq_ledger_events').select('item_id,event_type,occurred_on,amount,detail,source,created_at,external_key').order('created_at',{ascending:false}).limit(30),
+    sb.from('hq_vinted_relist_candidates').select('*').eq('state','PENDING').order('updated_at',{ascending:false}).limit(200)
   ]);
-  if(snapshotsError||reviewsError) throw (snapshotsError||reviewsError);
+  if(snapshotsError||reviewsError||relistCandidatesError) throw (snapshotsError||reviewsError||relistCandidatesError);
   if(ledgerError&&legacyError) throw ledgerError;
   if(status)status.textContent='Dane podstawowe gotowe · dociągam diagnostykę…';
   const [{data:gmailEvents,error:gmailError},{data:latestGmailBusinessEvents,error:latestGmailBusinessEventsError},{data:transactionExceptions,error:transactionExceptionsError},{data:qualityReport,error:qualityReportError},{data:collectorHealth,error:collectorHealthError},{data:emailSyncState,error:emailSyncError},{data:emailSyncRuns,error:emailSyncRunsError},{data:collectorRuns,error:collectorRunsError}]=await Promise.all([
@@ -81,6 +82,9 @@ async function loadData(){
     sold_on:item.sold_on||null,
     live_list_price:item.live_list_price??null
   }));
+  const pendingRelists=relistCandidates||[];
+  const pendingByItem=new Map(pendingRelists.map(candidate=>[String(candidate.item_id),candidate]));
+  const itemsWithPending=items.map(item=>({...item,relist_pending:pendingByItem.get(String(item.item_id))||null}));
   const allSnapshots=snapshots||[];
   const cloudSnapshots=allSnapshots.filter(snapshot=>['github_actions_vinted','supabase_edge_vinted'].includes(String(snapshot.source||'')));
   const cyclePool=cloudSnapshots.length?cloudSnapshots:allSnapshots;
@@ -89,7 +93,7 @@ async function loadData(){
   const previousCapturedAt=cycleTimes[1]||'';
   const latestCycle=cyclePool.filter(snapshot=>snapshot.captured_at===latestCapturedAt);
   const previousCycle=cyclePool.filter(snapshot=>snapshot.captured_at===previousCapturedAt);
-  const linked=new Map(items.filter(item=>item.vinted_item_id).map(item=>[String(item.vinted_item_id),item]));
+  const linked=new Map(itemsWithPending.filter(item=>item.vinted_item_id).map(item=>[String(item.vinted_item_id),item]));
   const latestIds=new Set(latestCycle.map(snapshot=>String(snapshot.vinted_item_id)));
   const previousIds=new Set(previousCycle.map(snapshot=>String(snapshot.vinted_item_id)));
   const liveById=new Map(latestCycle.map(snapshot=>[String(snapshot.vinted_item_id),snapshot]));
@@ -103,9 +107,9 @@ async function loadData(){
     }
   });
   const live=[...liveById.values()].filter(snapshot=>linked.get(String(snapshot.vinted_item_id))?.ledger_status!=='SOLD');
-  const missing=previousCapturedAt?items.filter(item=>item.ledger_status==='LISTED-BACKLOG'&&item.vinted_item_id&&!latestIds.has(String(item.vinted_item_id))&&!previousIds.has(String(item.vinted_item_id))):[];
+  const missing=previousCapturedAt?itemsWithPending.filter(item=>item.ledger_status==='LISTED-BACKLOG'&&item.vinted_item_id&&!latestIds.has(String(item.vinted_item_id))&&!previousIds.has(String(item.vinted_item_id))):[];
   const pendingGmailReviews=gmailEvents||[];
-  return {items,snapshots:live,reviews:reviews||[],events:events||[],eventsError,gmailEvents:pendingGmailReviews,gmailError,latestGmailBusinessEvent:(latestGmailBusinessEvents||[])[0]||null,latestGmailBusinessEventsError,transactionExceptions:transactionExceptions||[],transactionExceptionsError,qualityReport:(qualityReport||[])[0]||null,qualityReportError,collectorHealth:collectorHealth||null,collectorHealthError,emailSyncState:emailSyncState||null,emailSyncError,emailSyncRun:(emailSyncRuns||[])[0]||null,emailSyncRunsError,collectorRun:(collectorRuns||[])[0]||null,pendingGmailReviews,source,linked,missing,latestCapturedAt,previousCapturedAt,pendingConfirmation};
+  return {items:itemsWithPending,snapshots:live,relistCandidates:pendingRelists,relistCandidatesError, reviews:reviews||[],events:events||[],eventsError,gmailEvents:pendingGmailReviews,gmailError,latestGmailBusinessEvent:(latestGmailBusinessEvents||[])[0]||null,latestGmailBusinessEventsError,transactionExceptions:transactionExceptions||[],transactionExceptionsError,qualityReport:(qualityReport||[])[0]||null,qualityReportError,collectorHealth:collectorHealth||null,collectorHealthError,emailSyncState:emailSyncState||null,emailSyncError,emailSyncRun:(emailSyncRuns||[])[0]||null,emailSyncRunsError,collectorRun:(collectorRuns||[])[0]||null,pendingGmailReviews,source,linked,missing,latestCapturedAt,previousCapturedAt,pendingConfirmation};
 }
 
 export async function data(){

@@ -3,6 +3,7 @@ import {readFileSync} from 'node:fs';
 
 const system=readFileSync(new URL('./system.html',import.meta.url),'utf8');
 const operations=readFileSync(new URL('./operations.html',import.meta.url),'utf8');
+const relistMigration=readFileSync(new URL('../supabase/migrations/065_relist_pending_state_machine.sql',import.meta.url),'utf8');
 assert.match(system,/Poczta Vinted/);
 assert.match(system,/Ostatnia udana synchronizacja:/);
 assert.match(system,/Połączenie OAuth jest potwierdzone/);
@@ -15,6 +16,11 @@ assert.match(system,/gmail-action/,'The reconnect control must have its own spac
 assert.match(system,/aktualnie otwarte/);
 assert.match(system,/BŁĄD SYNCHRONIZACJI/);
 assert.match(system,/WYMAGA PONOWNEGO POŁĄCZENIA/);
-assert.match(operations,/Stan połączenia Gmail jest w System/);
+assert.match(operations,/Stan automatyzacji/);
 assert.match(operations,/Kolejka transakcji/);
+assert.match(operations,/RELIST PENDING/);
+assert.match(operations,/relistCandidates/);
+assert.match(relistMigration,/create table if not exists public\.hq_vinted_relist_candidates/);
+assert.match(relistMigration,/actor = 'MANUAL' and current_new_count < 1/);
+assert.match(relistMigration,/record_hq_relist_candidate/);
 console.log('System Gmail health UX regression checks passed');

@@ -26,3 +26,7 @@ jobs:
         run: node scripts/check_mojibake.mjs web
       - name: Check sale exception reconciliation
         run: node scripts/test_sale_exception_reconciliation.mjs
+      - name: Check relist pending state machine
+        run: node scripts/test_relist_contract.mjs
+      - name: Check operations state visibility
+        run: node web/system.test.mjs
