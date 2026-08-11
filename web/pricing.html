@@ -3,52 +3,75 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Pricing · FADEWELL HQ</title><link rel="stylesheet" href="hq.css">
 <style>
-  .pricing-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:0;border-left:1px solid var(--line);border-top:1px solid var(--line)}
-  .pricing-grid .card{border-left:0;border-top:0}
-  .pricing-card h3{font-size:16px}.pricing-card p{margin:7px 0}
-  .pricing-meta{display:grid;grid-template-columns:repeat(3,1fr);gap:0;border:1px solid var(--line);border-radius:0;overflow:hidden;margin:12px 0}
-  .pricing-meta div{padding:8px;background:#f8f4ed;border-right:1px solid var(--line)}.pricing-meta div:last-child{border-right:0}.pricing-meta b{display:block;margin-top:2px}
-  .pricing-action{color:var(--brown);font:700 12px/1 "Oswald",sans-serif;letter-spacing:.08em;text-transform:uppercase}
-  .pricing-action.keep{color:var(--green)}.pricing-action.presentation{color:var(--blue)}.pricing-action.observe{color:var(--muted)}.pricing-action.test_lower{color:#e9c37c}.pricing-action.raise{color:#e9c37c}
-  .pricing-note{min-height:43px}.pricing-proof{font-size:12px;color:var(--muted)}
-  @media(max-width:600px){.pricing-meta{grid-template-columns:1fr 1fr}}
+  .experiment-stack{display:grid;gap:18px}.experiment{padding:0}.experiment-head{display:flex;justify-content:space-between;gap:18px;padding:18px;border-bottom:1px solid var(--line)}
+  .experiment-head h2{margin:4px 0}.experiment-head p{max-width:78ch}.experiment-gate{min-width:230px;text-align:right}.experiment-gate b{display:block;color:var(--brown)}
+  .experiment-metrics{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));border-bottom:1px solid var(--line)}.experiment-metrics div{padding:12px 18px;border-right:1px solid var(--line)}.experiment-metrics div:last-child{border-right:0}.experiment-metrics b{display:block;font:400 27px/.95 var(--display)}
+  .lanes{display:grid;grid-template-columns:repeat(4,minmax(0,1fr))}.lane{min-height:130px;padding:16px;border-right:1px solid var(--line)}.lane:last-child{border-right:0}.lane h3{font-size:12px}.lane-count{color:var(--brown)}
+  .experiment-item{padding:11px 0;border-top:1px solid var(--line)}.experiment-item:first-of-type{margin-top:10px}.experiment-item p{margin:4px 0}.experiment-item .price{font:500 13px var(--label)}
+  .pricing-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:0;border-left:1px solid var(--line);border-top:1px solid var(--line)}.pricing-grid .card{border-left:0;border-top:0}
+  .pricing-card h3{font-size:16px}.pricing-card p{margin:7px 0}.pricing-meta{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid var(--line);margin:12px 0}.pricing-meta div{padding:8px;background:#f8f4ed;border-right:1px solid var(--line)}.pricing-meta div:last-child{border-right:0}.pricing-meta b{display:block;margin-top:2px}
+  .pricing-action{color:var(--brown);font:700 12px/1 var(--label);letter-spacing:.08em;text-transform:uppercase}.pricing-action.keep{color:var(--green)}.pricing-action.presentation{color:var(--blue)}.pricing-action.observe{color:var(--muted)}
+  .pricing-note{min-height:43px}.pricing-proof{font-size:12px;color:var(--muted)}.secondary-model{margin-top:36px}.secondary-model>summary{cursor:pointer;font:600 13px var(--label);letter-spacing:.08em;text-transform:uppercase}
+  @media(max-width:980px){.lanes{grid-template-columns:1fr 1fr}.lane:nth-child(2){border-right:0}.lane{border-bottom:1px solid var(--line)}.experiment-metrics{grid-template-columns:repeat(3,1fr)}}
+  @media(max-width:600px){.experiment-head{display:block}.experiment-gate{text-align:left;margin-top:12px}.lanes,.experiment-metrics{grid-template-columns:1fr}.lane,.experiment-metrics div{border-right:0;border-bottom:1px solid var(--line)}.pricing-meta{grid-template-columns:1fr 1fr}}
 </style>
 <main>
-  <header class="top"><div><div class="eyebrow">FADEWELL HQ · Pricing cockpit</div><h1>Co dziś zrobić z ceną.</h1><p class="muted">HQ zapisuje plan zmiany, ale cena obserwowana zmienia się dopiero po wykonaniu na Vinted i potwierdzeniu przez collector.</p></div><span class="badge">Advisory</span></header>
+  <header class="top"><div><div class="eyebrow">FADEWELL HQ · Pricing</div><h1>Eksperyment, nie kolejna lista rad.</h1><p class="muted">Cel operacyjny: 30 sprzedaży w 30 dni. HQ rozdziela zamiar, wykonanie na Vinted, potwierdzenie collectora i wynik w Ledgerze.</p></div><span class="badge">30 / 30 dni</span></header>
   <nav id="nav"></nav>
   <div class="row-actions"><button id="login">Zaloguj przez GitHub</button><button id="logout" hidden class="secondary">Wyloguj</button><span id="status" class="muted small"></span></div>
   <section id="app" hidden>
     <section id="summary" class="grid"></section>
-    <div class="section-title"><div><h2>Kolejka decyzji</h2><p class="muted small">Najpierw największy wpływ i najwyższa pewność. Klik prowadzi do osi prawdy DEN.</p></div><span id="count" class="muted small"></span></div>
-    <div id="rows" class="pricing-grid"></div>
+    <div class="section-title"><div><h2>Aktywne eksperymenty</h2><p class="muted small">Jedna oś: co trzeba wykonać, co czeka na obserwację i co faktycznie sprzedało.</p></div><span id="experimentCount" class="muted small"></span></div>
+    <section id="experiments" class="experiment-stack"></section>
+    <details class="card secondary-model">
+      <summary>Model indywidualnych estymat — narzędzie pomocnicze</summary>
+      <p class="muted small">Nie dokłada automatycznie kolejnych ruchów do aktywnej kohorty. Użyj go dopiero po decyzji z eksperymentu.</p>
+      <div class="section-title"><div><h2>Pozostałe listingi</h2><p class="muted small">Pozycje już objęte aktywnym eksperymentem są tu ukryte.</p></div><span id="count" class="muted small"></span></div>
+      <div id="rows" class="pricing-grid"></div>
+    </details>
   </section>
 </main>
 <script type="module">
-import{shell,data,$,safe,money,sb,itemTitle}from'./hq.js?v=20260809-live-title';
+import{shell,data,$,safe,money,sb,itemTitle,dateTime}from'./hq.js?v=20260809-live-title';
 import{buildCockpit}from'./pricing.js?v=20260716f';
+import{buildExperimentCockpit,displayState,experimentTotals}from'./experiment-cockpit.js?v=20260811a';
 const actionLabel={KEEP:'Zostaw cenę',OBSERVE:'Obserwuj',TEST_LOWER:'Testuj małą obniżkę',RAISE:'Podnieś cenę',PRESENTATION:'Popraw prezentację'};
 const actionClass=value=>({KEEP:'keep',OBSERVE:'observe',TEST_LOWER:'test_lower',RAISE:'raise',PRESENTATION:'presentation'}[value]||'observe');
 const num=value=>Number(value)||0;
-function card(row){
-  const{item,model,signal,decision,range}=row;
-  const confidence=model.status==='READY'?({HIGH:'wysoka',MEDIUM:'średnia',LOW:'niska'}[model.confidence]):'brak';
-  const estimate=range?`${money(range.low)} – ${money(range.high)}`:'Brak estymaty';
-  const likes=`${signal.likes??0} likes${signal.likesDelta===null?'':` · ${signal.likesDelta>=0?'+':''}${signal.likesDelta} / ${signal.historyDays} dni`}`;
-  const price=signal.price||num(item.live_list_price),lastChange=signal.priceChanges.at(-1),previous=lastChange?signal.rows[signal.rows.indexOf(lastChange)-1]:null,changeText=lastChange&&previous?`Ostatnia zmiana ceny: ${Math.max(0,Math.floor((Date.now()-new Date(lastChange.captured_at))/86400000))} dni temu, ${num(lastChange.price_pln)-num(previous.price_pln)>=0?'+':''}${num(lastChange.price_pln)-num(previous.price_pln)} zł.`:'';
-  return`<article class="card pricing-card"><div class="row-actions"><span class="pricing-action ${actionClass(decision.action)}">${safe(actionLabel[decision.action])}</span><span class="muted small">${safe(item.item_id)}</span></div><h3>${safe(itemTitle(item))}</h3><div class="pricing-meta"><div><span class="muted small">Cena teraz</span><b>${money(price)}</b></div><div><span class="muted small">Estymata close</span><b>${safe(estimate)}</b></div><div><span class="muted small">Kapitał / break-even</span><b>${money(decision.floor)}</b></div><div><span class="muted small">Dni live</span><b>${safe(signal.daysLive??'—')}</b></div><div><span class="muted small">Likes</span><b>${safe(likes)}</b></div></div><p class="pricing-note">${safe(decision.reason)}</p>${changeText?`<p class="muted small">${safe(changeText)}</p>`:''}${decision.nextPrice?`<p><b>${decision.action==='RAISE'?'Proponowana cena':'Następny test'}:</b> ${money(decision.nextPrice)}</p><button class="secondary" data-price-test="${safe(item.item_id)}" data-price="${safe(decision.nextPrice)}">Dodaj zmianę do kolejki</button>`:''}<p class="pricing-proof">Pewność: ${safe(confidence)} · ${safe(model.reason||'brak porównań')}</p><p class="row-actions"><a class="button secondary" href="ledger.html?item=${encodeURIComponent(item.item_id)}">Oś prawdy</a>${item.listing_url?`<a class="button secondary" target="_blank" rel="noreferrer" href="${safe(item.listing_url)}">Vinted</a>`:''}</p></article>`;
+const fmtDate=value=>value?new Intl.DateTimeFormat('pl-PL',{dateStyle:'medium'}).format(new Date(value)):'—';
+const typeLabel=value=>value==='PRICE_VELOCITY'?'Cena → sprzedaż':value==='PAID_EXPOSURE'?'Płatna ekspozycja':value;
+function experimentItem(row){
+  const state=displayState[row.display_state]||[row.display_state,''];
+  const price=row.proposed_price?`${money(row.baseline_price)} → ${money(row.proposed_price)}`:money(row.baseline_price);
+  return`<div class="experiment-item"><div class="row-actions"><b>${safe(row.item_id)}</b><span class="status ${row.display_state==='SOLD'?'sold':row.display_state==='ACTIVE'?'listed':row.display_state==='WAITING_COLLECTOR'?'unlisted':'warning'}">${safe(state[0])}</span></div><p>${safe(itemTitle(row))}</p><p class="price">${price}</p><p class="muted small">${safe(state[1])}</p><p class="row-actions"><a class="text-link" href="ledger.html?item=${encodeURIComponent(row.item_id)}">Oś prawdy</a>${row.listing_url?`<a class="text-link" target="_blank" rel="noreferrer" href="${safe(row.listing_url)}">Vinted</a>`:''}</p></div>`;
+}
+function lane(title,rows){return`<section class="lane"><h3>${safe(title)} <span class="lane-count">${rows.length}</span></h3>${rows.map(experimentItem).join('')||'<p class="empty small">Pusto.</p>'}</section>`}
+function experimentCard(experiment){
+  const awaiting=[...experiment.lanes.TO_EXECUTE,...experiment.lanes.WAITING_QUOTE,...experiment.lanes.CONDITIONAL];
+  return`<article class="card experiment"><header class="experiment-head"><div><div class="eyebrow">${safe(typeLabel(experiment.experiment_type))} · ${safe(experiment.experiment_id)}</div><h2>${safe(experiment.objective)}</h2><p class="muted small">Plan ${fmtDate(experiment.planned_start_on)}–${fmtDate(experiment.planned_end_on)}${experiment.activated_at?` · aktywowany ${dateTime(experiment.activated_at)}`:' · zegar jeszcze nie ruszył'}</p></div><div class="experiment-gate"><span class="muted small">Brama dnia 7</span><b>${safe(experiment.gateLabel)}</b></div></header><div class="experiment-metrics"><div><span class="muted small">Kohorta</span><b>${safe(experiment.item_count)}</b></div><div><span class="muted small">Sprzedane</span><b>${safe(experiment.sold_count)}</b></div><div><span class="muted small">Sprzedaż</span><b>${money(experiment.realised_sales)}</b></div><div><span class="muted small">Zysk</span><b>${money(experiment.realised_profit)}</b></div><div><span class="muted small">Kapitał uwolniony</span><b>${money(experiment.capital_released)}</b></div></div><div class="lanes">${lane('Do wykonania / decyzji',awaiting)}${lane('Czeka na collector',experiment.lanes.WAITING_COLLECTOR)}${lane('Aktywne',experiment.lanes.ACTIVE)}${lane('Sprzedane / wynik',experiment.lanes.SOLD)}</div></article>`;
+}
+function advisoryCard(row){
+  const{item,model,signal,decision,range}=row,confidence=model.status==='READY'?({HIGH:'wysoka',MEDIUM:'średnia',LOW:'niska'}[model.confidence]):'brak',estimate=range?`${money(range.low)} – ${money(range.high)}`:'Brak estymaty',likes=`${signal.likes??0} likes${signal.likesDelta===null?'':` · ${signal.likesDelta>=0?'+':''}${signal.likesDelta} / ${signal.historyDays} dni`}`,price=signal.price||num(item.live_list_price);
+  return`<article class="card pricing-card"><div class="row-actions"><span class="pricing-action ${actionClass(decision.action)}">${safe(actionLabel[decision.action])}</span><span class="muted small">${safe(item.item_id)}</span></div><h3>${safe(itemTitle(item))}</h3><div class="pricing-meta"><div><span class="muted small">Cena teraz</span><b>${money(price)}</b></div><div><span class="muted small">Estymata close</span><b>${safe(estimate)}</b></div><div><span class="muted small">Kapitał</span><b>${money(decision.floor)}</b></div><div><span class="muted small">Dni live</span><b>${safe(signal.daysLive??'—')}</b></div><div><span class="muted small">Likes</span><b>${safe(likes)}</b></div></div><p class="pricing-note">${safe(decision.reason)}</p>${decision.nextPrice?`<p><b>${decision.action==='RAISE'?'Proponowana cena':'Następny test'}:</b> ${money(decision.nextPrice)}</p><button class="secondary" data-price-test="${safe(item.item_id)}" data-price="${safe(decision.nextPrice)}">Dodaj zmianę do kolejki</button>`:''}<p class="pricing-proof">Pewność: ${safe(confidence)} · ${safe(model.reason||'brak porównań')}</p><p class="row-actions"><a class="button secondary" href="ledger.html?item=${encodeURIComponent(item.item_id)}">Oś prawdy</a>${item.listing_url?`<a class="button secondary" target="_blank" rel="noreferrer" href="${safe(item.listing_url)}">Vinted</a>`:''}</p></article>`;
 }
 if(await shell('pricing.html')){
   app.hidden=false;
   try{
-    const d=await data();
-    const history=await sb.from('hq_listing_snapshots').select('vinted_item_id,captured_at,price_pln,favourites,views,visible').like('source','github_actions_vinted%').order('captured_at',{ascending:false}).limit(5000);
-    if(history.error)throw history.error;
-    const cockpit=buildCockpit(d.items,history.data||[]);
-    const ready=cockpit.rows.filter(row=>row.model.status==='READY').length;
-    const actions=cockpit.rows.filter(row=>['TEST_LOWER','RAISE','PRESENTATION'].includes(row.decision.action)).length;
-    summary.innerHTML=[['Aktywne oferty',cockpit.rows.length],['Z estymatą',ready],['Ruchy do rozważenia',actions],['Kalibracja',cockpit.calibration.status==='CALIBRATED'?`gotowa (${cockpit.calibration.count})`:`zbiera dane (${cockpit.calibration.count})`]].map(([label,value])=>`<article class="card metric"><div class="n">${safe(value)}</div><div class="label">${safe(label)}</div></article>`).join('');
-    count.textContent=`${cockpit.rows.length} aktywnych listingów`;
-    rows.innerHTML=cockpit.rows.map(card).join('')||'<article class="card empty">Brak aktywnych ofert powiązanych z DEN.</article>';rows.querySelectorAll('button[data-price-test]').forEach(button=>button.onclick=async()=>{button.disabled=true;const{error}=await sb.rpc('record_hq_price_test_owner',{p:{item_id:button.dataset.priceTest,price:button.dataset.price,external_key:crypto.randomUUID()}});if(error){button.disabled=false;button.textContent='Nie dodano';return}button.textContent='Czeka na wykonanie na Vinted'});
+    const [d,history,progress,itemRows]=await Promise.all([
+      data(),
+      sb.from('hq_listing_snapshots').select('vinted_item_id,captured_at,price_pln,favourites,views,visible').like('source','github_actions_vinted%').order('captured_at',{ascending:false}).limit(5000),
+      sb.from('hq_experiment_progress').select('*').in('status',['WAITING_EXECUTION','ACTIVE','EVALUATE']).order('planned_start_on'),
+      sb.from('hq_experiment_item_cockpit').select('*')
+    ]);
+    for(const result of [history,progress,itemRows])if(result.error)throw result.error;
+    const experimentCockpit=buildExperimentCockpit(progress.data||[],itemRows.data||[]),totals=experimentTotals(experimentCockpit),thirtyDaysAgo=Date.now()-30*86400000,sales30=d.items.filter(item=>item.ledger_status==='SOLD'&&item.sold_on&&new Date(item.sold_on).getTime()>=thirtyDaysAgo).length;
+    summary.innerHTML=[['Sprzedaże / 30 dni',`${sales30} / 30`],['Kohorta sprzedana',`${totals.sold} / ${totals.items}`],['Czeka na collector',totals.waitingCollector],['Kapitał uwolniony',money(totals.capitalReleased)]].map(([label,value])=>`<article class="card metric"><div class="n">${safe(value)}</div><div class="label">${safe(label)}</div></article>`).join('');
+    experimentCount.textContent=`${experimentCockpit.length} eksperymenty`;
+    experiments.innerHTML=experimentCockpit.map(experimentCard).join('')||'<article class="card empty">Brak aktywnych eksperymentów.</article>';
+    const experimentIds=new Set((itemRows.data||[]).map(row=>row.item_id)),cockpit=buildCockpit(d.items,history.data||[]),advisory=cockpit.rows.filter(row=>!experimentIds.has(row.item.item_id));
+    count.textContent=`${advisory.length} listingów poza eksperymentami`;
+    rows.innerHTML=advisory.map(advisoryCard).join('')||'<article class="card empty">Brak ofert poza aktywnymi eksperymentami.</article>';
+    rows.querySelectorAll('button[data-price-test]').forEach(button=>button.onclick=async()=>{button.disabled=true;const{error}=await sb.rpc('record_hq_price_test_owner',{p:{item_id:button.dataset.priceTest,price:button.dataset.price,external_key:crypto.randomUUID()}});if(error){button.disabled=false;button.textContent='Nie dodano';return}button.textContent='Czeka na wykonanie na Vinted'});
   }catch(error){app.innerHTML=`<div class="notice">Nie udało się wczytać Pricing: ${safe(error.message||error)}</div>`;}
 }
 </script>

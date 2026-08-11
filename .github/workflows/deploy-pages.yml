@@ -22,6 +22,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Check pricing cockpit
+        run: node web/pricing.test.mjs && node web/experiment-cockpit.test.mjs && node scripts/test_experiment_engine.mjs
       - name: Reject malformed UTF-8 and mojibake
         run: node scripts/check_mojibake.mjs web
       - uses: actions/configure-pages@v5
