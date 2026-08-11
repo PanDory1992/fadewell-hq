@@ -21,4 +21,8 @@ assert.equal(levis.action,'OPEN_REPLACEMENT');assert.equal(levis.soldRecent.leng
 assert.equal(lee.action,'CLOSED');assert.equal(small.action,'CLOSED');assert.equal(policyFor(levis.f,cells).cell_id,'green');
 const migration=readFileSync(new URL('../supabase/migrations/20260811143000_sourcing_capacity_gate.sql',import.meta.url),'utf8');
 assert.match(migration,/hq_sourcing_gate_current/);assert.match(migration,/ONE_CONFIRMED_SALE_ONE_REPLACEMENT/);assert.match(migration,/hq_sourcing_replacement_queue_current/);assert.match(migration,/hq_capture_sourcing_replacement_release/);for(const den of ['202','264','225','223','285'])assert.match(migration,new RegExp(`DEN-${den}`));
+const encodingRepair=readFileSync(new URL('../supabase/migrations/20260811180000_sourcing_utf8_data_repair.sql',import.meta.url),'utf8');
+assert.doesNotMatch(encodingRepair,/[^\x00-\x7f]/,'Sourcing repair migration must stay ASCII-only in transport');
+assert.match(encodingRepair,/convert_from\(decode\(/);assert.match(encodingRepair,/hq_sourcing_gate_current/);assert.match(encodingRepair,/Sourcing UTF-8 repair incomplete/);
+for(const id of ['G-501-33-35','G-505-30-32','G-505-33-35','G-WRANGLER-30-32','G-WRANGLER-33-35','G-550-30-32','G-550-33-35','G-615-30-32','G-615-33-35','R-SMALL-WAIST','R-LEE-GENERIC','R-ORDINARY-219','R-OFF-NICHE','DEN-202','DEN-264','DEN-225','DEN-223','DEN-285'])assert.match(encodingRepair,new RegExp(id));
 console.log('Sourcing capacity gate tests passed');
