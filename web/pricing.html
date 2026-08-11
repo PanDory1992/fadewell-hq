@@ -12,8 +12,9 @@
   .pricing-card h3{font-size:16px}.pricing-card p{margin:7px 0}.pricing-meta{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid var(--line);margin:12px 0}.pricing-meta div{padding:8px;background:#f8f4ed;border-right:1px solid var(--line)}.pricing-meta div:last-child{border-right:0}.pricing-meta b{display:block;margin-top:2px}
   .pricing-action{color:var(--brown);font:700 12px/1 var(--label);letter-spacing:.08em;text-transform:uppercase}.pricing-action.keep{color:var(--green)}.pricing-action.presentation{color:var(--blue)}.pricing-action.observe{color:var(--muted)}
   .pricing-note{min-height:43px}.pricing-proof{font-size:12px;color:var(--muted)}.secondary-model{margin-top:36px}.secondary-model>summary{cursor:pointer;font:600 13px var(--label);letter-spacing:.08em;text-transform:uppercase}
-  @media(max-width:980px){.lanes{grid-template-columns:1fr 1fr}.lane:nth-child(2){border-right:0}.lane{border-bottom:1px solid var(--line)}.experiment-metrics{grid-template-columns:repeat(3,1fr)}}
-  @media(max-width:600px){.experiment-head{display:block}.experiment-gate{text-align:left;margin-top:12px}.lanes,.experiment-metrics{grid-template-columns:1fr}.lane,.experiment-metrics div{border-right:0;border-bottom:1px solid var(--line)}.pricing-meta{grid-template-columns:1fr 1fr}}
+  .experiment-studio{margin:36px 0}.studio-lanes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border:1px solid var(--line)}.studio-lanes>section{padding:16px;border-right:1px solid var(--line)}.studio-lanes>section:last-child{border-right:0}.studio-candidate{padding:14px 0;border-top:1px solid var(--line)}.studio-candidate h3{font-size:15px;margin:8px 0}.studio-candidate p{font-size:12px}.studio-candidate.specialty{background:#fff8e8;padding:14px}.studio-builder{margin-top:18px;padding:20px;border:1px solid var(--line);background:#f8f4ed}.studio-controls{display:grid;grid-template-columns:1.2fr 2fr .6fr auto;gap:12px;align-items:end;margin:16px 0}.studio-controls label{display:grid;gap:6px;font:600 11px var(--label);letter-spacing:.06em;text-transform:uppercase}.studio-controls input,.studio-controls select{min-width:0}.studio-draft{border-top:1px solid var(--line)}.draft-row{display:grid;grid-template-columns:2fr 1fr auto;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}.draft-row>div{display:grid}.draft-row label{display:grid;gap:4px;font-size:11px}.draft-row input{max-width:130px}
+  @media(max-width:980px){.lanes{grid-template-columns:1fr 1fr}.lane:nth-child(2){border-right:0}.lane{border-bottom:1px solid var(--line)}.experiment-metrics{grid-template-columns:repeat(3,1fr)}.studio-lanes{grid-template-columns:1fr}.studio-lanes>section{border-right:0;border-bottom:1px solid var(--line)}.studio-controls{grid-template-columns:1fr 1fr}}
+  @media(max-width:600px){.experiment-head{display:block}.experiment-gate{text-align:left;margin-top:12px}.lanes,.experiment-metrics{grid-template-columns:1fr}.lane,.experiment-metrics div{border-right:0;border-bottom:1px solid var(--line)}.pricing-meta,.studio-controls,.draft-row{grid-template-columns:1fr}}
 </style>
 <main>
   <header class="top"><div><div class="eyebrow">FADEWELL HQ · Pricing</div><h1>Eksperyment, nie kolejna lista rad.</h1><p class="muted">Cel operacyjny: 30 sprzedaży w 30 dni. HQ rozdziela zamiar, wykonanie na Vinted, potwierdzenie collectora i wynik w Ledgerze.</p></div><span class="badge">30 / 30 dni</span></header>
@@ -23,6 +24,7 @@
     <section id="summary" class="grid"></section>
     <div class="section-title"><div><h2>Aktywne eksperymenty</h2><p class="muted small">Jedna oś: co trzeba wykonać, co czeka na obserwację i co faktycznie sprzedało.</p></div><span id="experimentCount" class="muted small"></span></div>
     <section id="experiments" class="experiment-stack"></section>
+    <section id="studio" class="experiment-studio"></section>
     <details class="card secondary-model">
       <summary>Model indywidualnych estymat — narzędzie pomocnicze</summary>
       <p class="muted small">Nie dokłada automatycznie kolejnych ruchów do aktywnej kohorty. Użyj go dopiero po decyzji z eksperymentu.</p>
@@ -35,6 +37,7 @@
 import{shell,data,$,safe,money,sb,itemTitle,dateTime}from'./hq.js?v=20260809-live-title';
 import{buildCockpit}from'./pricing.js?v=20260716f';
 import{buildExperimentCockpit,displayState,experimentTotals}from'./experiment-cockpit.js?v=20260811a';
+import{mountExperimentStudio}from'./experiment-studio.js?v=20260811a';
 const actionLabel={KEEP:'Zostaw cenę',OBSERVE:'Obserwuj',TEST_LOWER:'Testuj małą obniżkę',RAISE:'Podnieś cenę',PRESENTATION:'Popraw prezentację'};
 const actionClass=value=>({KEEP:'keep',OBSERVE:'observe',TEST_LOWER:'test_lower',RAISE:'raise',PRESENTATION:'presentation'}[value]||'observe');
 const num=value=>Number(value)||0;
@@ -43,7 +46,8 @@ const typeLabel=value=>value==='PRICE_VELOCITY'?'Cena → sprzedaż':value==='PA
 function experimentItem(row){
   const state=displayState[row.display_state]||[row.display_state,''];
   const price=row.proposed_price?`${money(row.baseline_price)} → ${money(row.proposed_price)}`:money(row.baseline_price);
-  return`<div class="experiment-item"><div class="row-actions"><b>${safe(row.item_id)}</b><span class="status ${row.display_state==='SOLD'?'sold':row.display_state==='ACTIVE'?'listed':row.display_state==='WAITING_COLLECTOR'?'unlisted':'warning'}">${safe(state[0])}</span></div><p>${safe(itemTitle(row))}</p><p class="price">${price}</p><p class="muted small">${safe(state[1])}</p><p class="row-actions"><a class="text-link" href="ledger.html?item=${encodeURIComponent(row.item_id)}">Oś prawdy</a>${row.listing_url?`<a class="text-link" target="_blank" rel="noreferrer" href="${safe(row.listing_url)}">Vinted</a>`:''}</p></div>`;
+  const action=row.display_state==='TO_EXECUTE'&&row.experiment_type==='PRICE_VELOCITY'?`<button class="secondary" data-exec-kind="PRICE" data-experiment="${safe(row.experiment_id)}" data-item="${safe(row.item_id)}">Wykonane na Vinted</button>`:row.display_state==='WAITING_QUOTE'&&row.experiment_type==='PAID_EXPOSURE'?`<button class="secondary" data-exec-kind="EXPOSURE" data-experiment="${safe(row.experiment_id)}" data-item="${safe(row.item_id)}">Zapisz zakup ekspozycji</button>`:'';
+  return`<div class="experiment-item"><div class="row-actions"><b>${safe(row.item_id)}</b><span class="status ${row.display_state==='SOLD'?'sold':row.display_state==='ACTIVE'?'listed':row.display_state==='WAITING_COLLECTOR'?'unlisted':'warning'}">${safe(state[0])}</span></div><p>${safe(itemTitle(row))}</p><p class="price">${price}</p><p class="muted small">${safe(state[1])}</p>${action}<p class="row-actions"><a class="text-link" href="ledger.html?item=${encodeURIComponent(row.item_id)}">Oś prawdy</a>${row.listing_url?`<a class="text-link" target="_blank" rel="noreferrer" href="${safe(row.listing_url)}">Vinted</a>`:''}</p></div>`;
 }
 function lane(title,rows){return`<section class="lane"><h3>${safe(title)} <span class="lane-count">${rows.length}</span></h3>${rows.map(experimentItem).join('')||'<p class="empty small">Pusto.</p>'}</section>`}
 function experimentCard(experiment){
@@ -68,6 +72,8 @@ if(await shell('pricing.html')){
     summary.innerHTML=[['Sprzedaże / 30 dni',`${sales30} / 30`],['Kohorta sprzedana',`${totals.sold} / ${totals.items}`],['Czeka na collector',totals.waitingCollector],['Kapitał uwolniony',money(totals.capitalReleased)]].map(([label,value])=>`<article class="card metric"><div class="n">${safe(value)}</div><div class="label">${safe(label)}</div></article>`).join('');
     experimentCount.textContent=`${experimentCockpit.length} eksperymenty`;
     experiments.innerHTML=experimentCockpit.map(experimentCard).join('')||'<article class="card empty">Brak aktywnych eksperymentów.</article>';
+    mountExperimentStudio(studio,{items:d.items,snapshots:history.data||[],experimentRows:itemRows.data||[],sb});
+    experiments.onclick=async event=>{const button=event.target.closest('button[data-exec-kind]');if(!button)return;const exposure=button.dataset.execKind==='EXPOSURE';let spend=null;if(exposure){spend=Number(String(prompt('Wpisz rzeczywisty koszt Podbicia z Vinted (PLN):','')||'').replace(',','.'));if(!spend||spend<=0)return}button.disabled=true;button.textContent='Zapisuję…';const{error}=await sb.rpc('report_hq_experiment_execution_owner',{p:{experiment_id:button.dataset.experiment,item_id:button.dataset.item,execution_type:button.dataset.execKind,promotion_spend:spend,external_key:crypto.randomUUID()}});if(error){button.disabled=false;button.textContent='Nie zapisano';return}setTimeout(()=>location.reload(),400)};
     const experimentIds=new Set((itemRows.data||[]).map(row=>row.item_id)),cockpit=buildCockpit(d.items,history.data||[]),advisory=cockpit.rows.filter(row=>!experimentIds.has(row.item.item_id));
     count.textContent=`${advisory.length} listingów poza eksperymentami`;
     rows.innerHTML=advisory.map(advisoryCard).join('')||'<article class="card empty">Brak ofert poza aktywnymi eksperymentami.</article>';
