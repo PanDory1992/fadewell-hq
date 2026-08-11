@@ -24,6 +24,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Check pricing cockpit
         run: node web/pricing.test.mjs && node web/experiment-cockpit.test.mjs && node scripts/test_experiment_engine.mjs
+      - name: Check sourcing capacity gate
+        run: node web/sourcing.test.mjs
       - name: Reject malformed UTF-8 and mojibake
         run: node scripts/check_mojibake.mjs web
       - uses: actions/configure-pages@v5
