@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+
+const migration=readFileSync(new URL('../supabase/migrations/20260811133000_durable_experiment_engine.sql',import.meta.url),'utf8');
+assert.match(migration,/create table if not exists public\.hq_experiments/);
+assert.match(migration,/create table if not exists public\.hq_experiment_items/);
+assert.match(migration,/hq_confirm_price_experiment_from_snapshot/);
+assert.match(migration,/hq_capture_experiment_sale/);
+assert.match(migration,/with \(security_invoker=true\)/);
+assert.match(migration,/EXP-2026-08-11-PRICE-VELOCITY/);
+assert.match(migration,/EXP-2026-08-11-VINTED-BUMP/);
+assert.match(migration,/PRICE_CHANGE_CONFIRMED/);
+assert.match(migration,/EXPERIMENT_ITEM_SOLD/);
+assert.doesNotMatch(migration,/update\s+public\.hq_ledger_items\s+set\s+live_list_price/i);
+for(const den of ['191','135','158','173','180','193','217','228','210','207','166'])assert.match(migration,new RegExp(`DEN-${den}`));
+console.log('Experiment engine migration contract passed');

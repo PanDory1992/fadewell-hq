@@ -30,3 +30,5 @@ jobs:
         run: node scripts/test_relist_contract.mjs
       - name: Check operations state visibility
         run: node web/system.test.mjs
+      - name: Check experiment engine contract
+        run: node scripts/test_experiment_engine.mjs
