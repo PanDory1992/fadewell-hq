@@ -2,9 +2,11 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
 const TEXT_EXTENSIONS = new Set([
-  ".css", ".html", ".js", ".json", ".md", ".mjs", ".svg", ".txt", ".webmanifest", ".xml",
+  ".css", ".csv", ".html", ".js", ".json", ".md", ".mjs", ".ps1", ".py", ".sql",
+  ".svg", ".ts", ".tsx", ".txt", ".webmanifest", ".xml", ".yaml", ".yml",
 ]);
-const MOJIBAKE = /\uFFFD|[\u0080-\u009F]|(?:Ã|Â|Å|Ä|â)[\u0080-\u024F\u2000-\u2122]/gu;
+const SKIP_DIRECTORIES = new Set([".git", ".deps", ".venv", "CacheStorage", "node_modules", "vendor"]);
+const MOJIBAKE = /\uFFFD|[\u0080-\u009F]|(?:Ã|Â|Å|Ä|â)[\u0080-\u02FF\u2000-\u2122]/gu;
 const MAX_FINDINGS = 50;
 
 function hasMojibake(value) {
@@ -18,11 +20,11 @@ function selfTest() {
     "Ångström and Änderung are legitimate text",
   ];
   const broken = [
-    "poÃ…â€šÃ„â€¦czenie",
-    "System Ã‚Â· FADEWELL HQ",
-    "STATUS NIEDOSTÃ„ËœPNY",
+    "po\u00c5\u201a\u00c4\u2026czenie",
+    "System \u00c2\u00b7 FADEWELL HQ",
+    "STATUS NIEDOST\u00c4\u02dcPNY",
     "bad" + String.fromCharCode(0x81) + "control",
-    "�",
+    String.fromCharCode(0xfffd),
   ];
 
   for (const sample of clean) {
@@ -41,6 +43,7 @@ async function walk(root) {
   const entries = await readdir(root, { withFileTypes: true });
   const files = [];
   for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+    if (entry.isDirectory() && SKIP_DIRECTORIES.has(entry.name)) continue;
     const target = path.join(root, entry.name);
     if (entry.isDirectory()) files.push(...await walk(target));
     else if (entry.isFile()) files.push(target);

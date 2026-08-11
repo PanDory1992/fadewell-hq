@@ -1,7 +1,7 @@
 type Item = Record<string, unknown>;
 type Listing = Record<string, unknown>;
 const STOP = new Set(['jeans','denim','vintage','pants','trousers','fit','blue','black','with','for','the','and','new','size']);
-const text = (value: unknown) => String(value ?? '').toLowerCase().replace(/[â€™']/g,'');
+const text = (value: unknown) => String(value ?? '').toLowerCase().replace(/[’']/g,'');
 const set = (matches: Iterable<string>) => new Set(matches);
 const overlap = (a: Set<string>, b: Set<string>) => set([...a].filter(value => b.has(value)));
 const tokens = (value: unknown) => set((text(value).match(/[a-z0-9]+/g) || []).filter(token => token.length >= 3 && !STOP.has(token)));
