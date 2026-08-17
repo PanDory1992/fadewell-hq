@@ -18,7 +18,7 @@ jobs:
   deploy:
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url || steps.deployment-retry.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,11 +28,50 @@ jobs:
         run: node web/sourcing.test.mjs
       - name: Reject malformed UTF-8 and mojibake
         run: node scripts/check_mojibake.mjs .
-      - uses: actions/configure-pages@v5
+      - id: configure-pages
+        uses: actions/configure-pages@v5
         with:
           enablement: true
-      - uses: actions/upload-pages-artifact@v3
+        continue-on-error: true
+      - name: Wait before retrying Pages setup
+        if: steps.configure-pages.outcome == 'failure'
+        run: sleep 45
+      - id: configure-pages-retry
+        if: steps.configure-pages.outcome == 'failure'
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+        continue-on-error: true
+      - name: Fail after Pages setup retry is exhausted
+        if: steps.configure-pages.outcome == 'failure' && steps.configure-pages-retry.outcome == 'failure'
+        run: exit 1
+      - id: upload-pages-artifact
+        uses: actions/upload-pages-artifact@v3
         with:
           path: web
+        continue-on-error: true
+      - name: Wait before retrying Pages artifact upload
+        if: steps.upload-pages-artifact.outcome == 'failure'
+        run: sleep 45
+      - id: upload-pages-artifact-retry
+        if: steps.upload-pages-artifact.outcome == 'failure'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+        continue-on-error: true
+      - name: Fail after Pages artifact upload retry is exhausted
+        if: steps.upload-pages-artifact.outcome == 'failure' && steps.upload-pages-artifact-retry.outcome == 'failure'
+        run: exit 1
       - id: deployment
         uses: actions/deploy-pages@v4
+        continue-on-error: true
+      - name: Wait before retrying Pages deployment
+        if: steps.deployment.outcome == 'failure'
+        run: sleep 45
+      - id: deployment-retry
+        if: steps.deployment.outcome == 'failure'
+        uses: actions/deploy-pages@v4
+        continue-on-error: true
+      - name: Fail after Pages deployment retry is exhausted
+        if: steps.deployment.outcome == 'failure' && steps.deployment-retry.outcome == 'failure'
+        run: exit 1
