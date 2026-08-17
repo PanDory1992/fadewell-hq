@@ -17,7 +17,25 @@ SUPABASE_URL = os.environ["SUPABASE_URL"].rstrip("/")
 SERVICE_KEY = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
 USER_ID = int(os.environ.get("VINTED_USER_ID", "271911480"))
 DETAIL_DELAY = float(os.environ.get("VINTED_DETAIL_DELAY_SECONDS", "1.0"))
+DETAIL_FETCH_ATTEMPTS = max(1, int(os.environ.get("STOREFRONT_DETAIL_FETCH_ATTEMPTS", "3")))
+DETAIL_RETRY_DELAY = float(os.environ.get("STOREFRONT_DETAIL_RETRY_DELAY_SECONDS", "10.0"))
 ARCHIVE_SOLD_SINCE = os.environ.get("STOREFRONT_ARCHIVE_SOLD_SINCE", "2026-08-01")
+
+
+def fetch_detail_with_retries(session, item):
+    for attempt in range(1, DETAIL_FETCH_ATTEMPTS + 1):
+        try:
+            return fetch_vinted_detail(session, item)
+        except (requests.RequestException, RuntimeError) as error:
+            if attempt == DETAIL_FETCH_ATTEMPTS:
+                raise
+            delay = DETAIL_RETRY_DELAY * attempt
+            print(
+                f"::warning title=Vinted detail retry::"
+                f"Listing {item['id']} was unavailable on attempt {attempt}/"
+                f"{DETAIL_FETCH_ATTEMPTS}; retrying in {delay:.0f}s: {error}"
+            )
+            time.sleep(delay)
 
 
 def main():
@@ -34,7 +52,7 @@ def main():
     records, failures = [], []
     for item in catalog_items:
         try:
-            detail = attach_catalog_path(fetch_vinted_detail(session, item), catalog_paths)
+            detail = attach_catalog_path(fetch_detail_with_retries(session, item), catalog_paths)
             scope_excluded = is_den_scope_excluded(item["id"])
             record = build_storefront_record(detail, scope_excluded=scope_excluded)
             records.append(record)
