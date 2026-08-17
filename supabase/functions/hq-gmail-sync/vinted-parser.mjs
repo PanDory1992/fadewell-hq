@@ -1,4 +1,4 @@
-export const VINTED_PARSER_VERSION = '2026-07-15.template.v3';
+export const VINTED_PARSER_VERSION = '2026-08-17.template.v4';
 
 export const nonEmptyLines = (body) => body.replace(/\r/g, '').split('\n').map((line) => line.replace(/\s+/g, ' ').trim()).filter(Boolean);
 const normalized = (value) => value.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, ' ').trim();
@@ -72,9 +72,12 @@ export const parseVintedMail = ({ subject, body }) => {
       transaction_id: transaction, item_title: title, tracking_code: labelValue(body, 'Tracking code'), transaction_date: labelValue(body, 'Shipment deadline')
     });
   }
-  if (/^Confirm your order/i.test(subject)) {
+  const confirmationNeeded = /^confirmation needed$/i.test(subject.trim())
+    || /^confirm your order/i.test(subject)
+    || nonEmptyLines(body).some((line) => /^confirmation needed$/i.test(line));
+  if (confirmationNeeded) {
     const title = body.match(/Confirm your order for\s+(.+?)\s+in Vinted\.?$/im)?.[1]?.trim() || null;
-    return result('UNCLASSIFIED', 'confirmation_needed_en_v1', { item_title: title });
+    return result('NOISE', 'confirmation_needed_trash_en_v1', { item_title: title });
   }
   if (NOISE_SUBJECT.test(subject)) return result('NOISE', 'noise_subject_en_v1', {});
   return result('UNCLASSIFIED', 'unknown_v1', {});
