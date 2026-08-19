@@ -47,4 +47,4 @@ jobs:
           done
       - name: Keep watchdog failure visible without notification spam
         if: ${{ inputs.mode != 'manual' && steps.collect.outcome == 'failure' }}
-        run: echo "::warning title=Vinted collector stale::Vinted did not return a complete catalog. No partial snapshot was saved; HQ freshness remains the operational alert."
+        run: echo "::warning title=Vinted collector stale::Vinted collection failed after retries. HQ freshness remains the operational alert."
