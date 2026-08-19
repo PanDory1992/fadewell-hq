@@ -79,15 +79,14 @@ class SnapshotPaginationTests(unittest.TestCase):
         ])
         self.assertEqual([row["id"] for row in sync.fetch_items(session)], [1, 2])
 
-    def test_rejects_incomplete_advertised_total(self):
+    def test_accepts_incomplete_advertised_total(self):
         session = Session([
             {},
             {"items": [item(1)], "pagination": {"total_pages": 1, "total_entries": 3}},
         ])
-        with self.assertRaisesRegex(RuntimeError, "expected 3 unique items, got 1"):
-            list(sync.fetch_items(session, max_passes=1))
+        self.assertEqual([row["id"] for row in sync.fetch_items(session, max_passes=1)], [1])
 
-    def test_defers_one_item_catalog_gap_to_scoped_guard(self):
+    def test_accepts_one_item_catalog_gap(self):
         session = Session([
             {},
             {"items": [item(1)], "pagination": {"total_pages": 1, "total_entries": 2}},

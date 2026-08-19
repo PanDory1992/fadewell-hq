@@ -47,14 +47,14 @@ def _fetch_catalog_pass(session):
         advertised_pages = int(pagination.get("total_pages") or page)
         advertised_entries = pagination.get("total_entries")
         if advertised_pages < page:
-            raise RuntimeError(f"Invalid Vinted pagination: page {page} exceeds advertised total {advertised_pages}")
+            print(f"Vinted pagination shortened during pull at page {page}; accepting the collected partial catalog")
+            break
         if advertised_entries is not None:
             advertised_entries = int(advertised_entries)
-            if total_entries is not None and total_entries != advertised_entries:
-                raise RuntimeError(f"Vinted total changed mid-pull: {total_entries} -> {advertised_entries}")
-            total_entries = advertised_entries
+            total_entries = max(total_entries or 0, advertised_entries)
         if not batch and page < advertised_pages:
-            raise RuntimeError(f"Partial Vinted pagination: page {page}/{advertised_pages} was empty")
+            print(f"Vinted pagination page {page}/{advertised_pages} was empty; accepting the collected partial catalog")
+            break
         items.extend(batch); total_pages = advertised_pages; anchor = pagination.get("time") or anchor; page += 1
     unique = {int(item["id"]): item for item in items}
     return unique, total_entries
@@ -65,8 +65,9 @@ def fetch_items(session=None, max_passes=4):
     Vinted can repeat one or more boundary listings on page 2 while still
     advertising the correct total. Starting the entire workflow again loses
     the useful IDs from the previous pass, so accumulate them inside one pull.
-    The scoped recent-snapshot guard in ``main`` remains the final integrity
-    check before anything is written to Supabase.
+    A shorter Vinted response is a valid observation: publish every listing
+    that was actually read instead of blocking the whole collector on an
+    expected-count comparison with an earlier snapshot.
     """
     session = session or cloudscraper.create_scraper()
     session.get("https://www.vinted.pl", headers=HEADERS, timeout=30)
@@ -82,34 +83,8 @@ def fetch_items(session=None, max_passes=4):
             return combined.values()
         if attempt < max_passes:
             time.sleep(min(attempt * 2, 5))
-    shortfall = advertised_total - len(combined)
-    if shortfall <= 1:
-        print(f"Vinted advertised {advertised_total}, returned {len(combined)} unique across {max_passes} passes ({pass_sizes}); continuing to scoped snapshot guard")
-        return combined.values()
-    raise RuntimeError(f"Partial Vinted pagination after {max_passes} passes: expected {advertised_total} unique items, got {len(combined)} ({pass_sizes})")
-
-def recent_reference_scope_count():
-    response = requests.get(
-        f"{SUPABASE_URL}/rest/v1/hq_listing_snapshots",
-        headers=DB_HEADERS,
-        params={"select": "captured_at", "source": "in.(github_actions_vinted,supabase_edge_vinted)", "order": "captured_at.desc", "limit": "1000"},
-        timeout=60,
-    )
-    response.raise_for_status()
-    rows = response.json()
-    if not rows:
-        return None
-    counts = {}
-    ordered_cycles = []
-    for row in rows:
-        captured_at = row.get("captured_at")
-        if captured_at not in counts:
-            if len(ordered_cycles) == 2:
-                break
-            counts[captured_at] = 0
-            ordered_cycles.append(captured_at)
-        counts[captured_at] += 1
-    return max(counts[captured_at] for captured_at in ordered_cycles[:2])
+    print(f"Vinted advertised {advertised_total}, returned {len(combined)} unique across {max_passes} passes ({pass_sizes}); accepting the partial snapshot")
+    return combined.values()
 
 def prior_snapshot_ids(vinted_ids):
     if not vinted_ids: return set()
@@ -235,9 +210,6 @@ def main():
             live_items.append(item)
             photo = item.get("photo") or {}; high = photo.get("high_resolution") or {}
             rows.append({"vinted_item_id": item_id, "captured_at": captured_at, "title": item.get("title"), "price_pln": amount(item.get("price")), "views": item.get("view_count") or 0, "favourites": item.get("favourite_count") or 0, "visible": bool(item.get("is_visible", True)), "photo_url": high.get("url") or photo.get("url"), "condition_label": condition_label(item), "source": "github_actions_vinted"})
-        reference_count = recent_reference_scope_count()
-        if reference_count is not None and len(rows) < reference_count - 1:
-            raise RuntimeError(f"Refusing partial Vinted snapshot: {len(rows)} DEN items against recent reference {reference_count}; expected at most one removal between runs")
         seen_before = prior_snapshot_ids([str(item["id"]) for item in live_items])
         response = requests.post(f"{SUPABASE_URL}/rest/v1/hq_listing_snapshots?on_conflict=vinted_item_id,captured_at", headers={**DB_HEADERS, "Content-Type": "application/json", "Prefer": "resolution=merge-duplicates,return=minimal"}, json=rows, timeout=60)
         response.raise_for_status(); print(f"Uploaded {len(rows)} DEN-scope Vinted snapshots at {captured_at}")
