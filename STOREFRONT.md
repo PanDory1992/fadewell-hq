@@ -11,7 +11,7 @@ evidence, owner data, or other accounting fields.
    public site repository, which starts a build immediately. The site's hourly
    schedule remains as a fallback.
 2. `cloud/storefront_live_sync.py` reads the live wardrobe once, immediately
-   updates cheap catalogue facts, and enriches only new, changed, incomplete or
+   updates cheap catalogue facts, and enriches only new, incomplete or
    rotating cached records from detail pages. A detail-page block preserves the
    last complete description, measurements and gallery and resumes later.
 3. `cloud/storefront_sync.py` accepts only Vinted category evidence for the

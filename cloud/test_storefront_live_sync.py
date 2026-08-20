@@ -29,7 +29,7 @@ class StorefrontLiveSyncTests(unittest.TestCase):
         self.assertNotIn("published", result)
 
     @patch("storefront_live_sync.is_den_scope_excluded", return_value=False)
-    def test_detail_candidates_prioritize_new_and_changed_then_rotate_cache(self, _excluded):
+    def test_detail_candidates_prioritize_new_then_rotate_cache(self, _excluded):
         catalog = [
             {"id": 101, "title": "New", "price": {"amount": "10"}, "photos": []},
             {"id": 102, "title": "Changed", "price": {"amount": "20"}, "photos": []},
@@ -40,7 +40,7 @@ class StorefrontLiveSyncTests(unittest.TestCase):
             "103": {"title": "Cached", "price_pln": 30, "photos": [], "publication_notes": {"publication_status": "PUBLISHED"}},
         }
         ids = [str(item["id"]) for item in live.detail_candidates(catalog, existing, slot=1, shards=2)]
-        self.assertEqual(ids[:2], ["101", "102"])
+        self.assertEqual(ids, ["101", "103"])
         self.assertIn("103", ids)
 
     @patch("storefront_live_sync.is_den_scope_excluded", return_value=True)

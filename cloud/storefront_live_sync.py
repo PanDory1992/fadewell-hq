@@ -85,7 +85,7 @@ def catalog_observation(item, captured_at):
 
 
 def detail_candidates(catalog_items, existing, *, slot=None, shards=DETAIL_REFRESH_SHARDS):
-    """Prioritize new/unfinished/changed rows, then refresh a small rotating shard."""
+    """Prioritize new/unfinished rows, then refresh a small rotating shard."""
     slot = int(time.time() // (15 * 60)) % shards if slot is None else int(slot) % shards
     priority, rotation = [], []
     for item in catalog_items:
@@ -93,17 +93,12 @@ def detail_candidates(catalog_items, existing, *, slot=None, shards=DETAIL_REFRE
         if is_den_scope_excluded(item_id):
             continue
         previous = existing.get(item_id)
-        changed = bool(previous) and any((
-            str(previous.get("title") or "") != str(item.get("title") or ""),
-            _amount(previous.get("price_pln")) != _amount(item.get("price")),
-            list(previous.get("photos") or []) != _photo_urls(item),
-        ))
         publication_status = (previous or {}).get("publication_notes") or {}
         publication_status = publication_status.get("publication_status")
-        unfinished = previous and publication_status not in {
+        unfinished = previous and not previous.get("published") and publication_status not in {
             "PUBLISHED", "OUT_OF_SCOPE_CATEGORY", "OUT_OF_SCOPE_DEN", "NO_CATEGORY_EVIDENCE",
         }
-        if not previous or changed or unfinished:
+        if not previous or unfinished:
             priority.append(item)
         elif int(item_id) % shards == slot:
             rotation.append(item)
