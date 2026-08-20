@@ -109,7 +109,7 @@ async function loadData(){
     }
   });
   const live=[...liveById.values()].filter(snapshot=>linked.get(String(snapshot.vinted_item_id))?.ledger_status!=='SOLD');
-  const missing=previousCapturedAt?itemsWithPending.filter(item=>item.ledger_status==='LISTED-BACKLOG'&&item.vinted_item_id&&!latestIds.has(String(item.vinted_item_id))&&!previousIds.has(String(item.vinted_item_id))):[];
+  const missing=previousCapturedAt?itemsWithPending.filter(item=>item.ledger_status==='LISTED-BACKLOG'&&!item.storefront_hidden&&item.vinted_item_id&&!latestIds.has(String(item.vinted_item_id))&&!previousIds.has(String(item.vinted_item_id))):[];
   const pendingGmailReviews=gmailEvents||[];
   return {items:itemsWithPending,snapshots:live,relistCandidates:pendingRelists,relistCandidatesError, reviews:reviews||[],events:events||[],eventsError,gmailEvents:pendingGmailReviews,gmailError,latestGmailBusinessEvent:(latestGmailBusinessEvents||[])[0]||null,latestGmailBusinessEventsError,transactionExceptions:transactionExceptions||[],transactionExceptionsError,qualityReport:(qualityReport||[])[0]||null,qualityReportError,collectorHealth:collectorHealth||null,collectorHealthError,emailSyncState:emailSyncState||null,emailSyncError,emailSyncRun:(emailSyncRuns||[])[0]||null,emailSyncRunsError,collectorRun:(collectorRuns||[])[0]||null,pendingGmailReviews,source,linked,missing,latestCapturedAt,previousCapturedAt,pendingConfirmation};
 }

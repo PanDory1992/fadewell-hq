@@ -24,6 +24,7 @@ assert.match(sharedResolver,/item\.live_title/,'The edge resolver must compare a
 assert.match(sharedResolver,/item\.manual_title/,'The resolver must compare the last owner title from Ledger.');
 assert.match(sharedResolver,/conflictingSize/,'A conflicting waist or length must block automatic identity resolution.');
 assert.match(edge,/\.eq\('storefront_hidden',false\)/,'The edge resolver must not auto-relist an owner-hidden DEN.');
+assert.match(hq,/item\.ledger_status==='LISTED-BACKLOG'&&!item\.storefront_hidden&&item\.vinted_item_id/,'An owner-hidden listing must not create a MISSING LIVE exception.');
 assert.match(edge,/tytuł w Ledger przed Vinted/,'Automatic listing events must retain the title transition.');
 assert.match(correction,/owner_hidden_requires_manual_resolution/,'The database must reject a stale system relist for an owner-hidden DEN.');
 assert.match(correction,/DEN-274/,'The production identity correction must be tracked as a guarded migration.');
