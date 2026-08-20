@@ -2,7 +2,7 @@ name: Sync FADEWELL Storefront
 
 on:
   schedule:
-    - cron: '17 * * * *'
+    - cron: '2,17,32,47 * * * *'
   workflow_dispatch:
 
 permissions:
@@ -15,19 +15,45 @@ concurrency:
 jobs:
   sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
       - run: pip install --disable-pip-version-check cloudscraper requests
-      - name: Refresh public pairs from Vinted
+      - name: Refresh HQ and public pairs from Vinted
+        id: refresh
+        continue-on-error: true
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           VINTED_USER_ID: '271911480'
           STOREFRONT_ARCHIVE_SOLD_SINCE: '2026-08-01'
-        run: python cloud/storefront_live_sync.py
-      # The public shop reads the current Supabase projection at page load.
-      # The site's own schedule refreshes its static SEO/image snapshot.
+        run: |
+          for attempt in 1 2 3; do
+            python cloud/storefront_live_sync.py && exit 0
+            if [ "$attempt" -eq 3 ]; then exit 1; fi
+            sleep $((attempt * 20))
+          done
+      - name: Suppress a transient failure while the last good projection is fresh
+        if: steps.refresh.outcome == 'failure'
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python cloud/storefront_health_check.py --max-age-minutes 75
+      - name: Rebuild the static Storefront immediately
+        if: steps.refresh.outcome == 'success'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.FADEWELL_SITE_DISPATCH_TOKEN }}
+        run: |
+          for attempt in 1 2 3; do
+            gh api --method POST repos/PanDory1992/fadewell-site/dispatches \
+              -f event_type=storefront-updated && exit 0
+            if [ "$attempt" -eq 3 ]; then
+              echo "::warning title=Storefront dispatch deferred::The live shop is current. The hourly site build remains the static fallback."
+              exit 1
+            fi
+            sleep $((attempt * 15))
+          done

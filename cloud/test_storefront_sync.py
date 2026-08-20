@@ -134,6 +134,29 @@ Measurements (measured flat):
         self.assertEqual(post.call_args.args[0], "https://db.example/rest/v1/rpc/sync_fadewell_storefront_dna")
         self.assertEqual(post.call_args.kwargs["json"], {})
 
+    @patch("storefront_sync.requests.post")
+    def test_catalog_metadata_refreshes_hq_without_identity_or_status_fields(self, post):
+        post.return_value = FakeResponse(payload=2)
+        changed = sf.sync_hq_catalog_metadata("https://db.example/", "secret", [{
+            "vinted_item_id": "123", "title": "A pair", "price_pln": 129,
+            "photos": ["one.jpg"], "available": True,
+        }])
+        self.assertEqual(changed, 2)
+        row = post.call_args.kwargs["json"]["p"][0]
+        self.assertEqual(row["photo_url"], "one.jpg")
+        self.assertNotIn("available", row)
+        self.assertNotIn("ledger_status", row)
+
+    @patch("storefront_sync.requests.post")
+    def test_storefront_success_marker_is_service_only(self, post):
+        post.return_value = FakeResponse()
+        sf.record_storefront_sync_result(
+            "https://db.example/", "secret", True, catalog_count=122, detail_deferred=2,
+        )
+        self.assertTrue(post.call_args.kwargs["json"]["p_success"])
+        self.assertEqual(post.call_args.kwargs["json"]["p_catalog_count"], 122)
+        self.assertEqual(post.call_args.kwargs["json"]["p_detail_deferred"], 2)
+
     def test_category_comes_from_vinted_not_title(self):
         shorts = {"id": 1, "title": "Perfect vintage jeans", "catalog": {"title": "Denim shorts"}}
         trousers = {"id": 2, "title": "Unhelpful title", "catalog": {"title": "Trousers"}}

@@ -514,6 +514,81 @@ def upsert_storefront_records(supabase_url, service_key, records):
     response.raise_for_status()
 
 
+def upsert_storefront_catalog_observations(supabase_url, service_key, records):
+    """Upsert cheap live facts without blanking cached detail-only columns."""
+    if not records:
+        raise RuntimeError("Refusing an empty storefront catalog observation")
+    response = requests.post(
+        f"{supabase_url.rstrip('/')}/rest/v1/fadewell_storefront_products?on_conflict=vinted_item_id",
+        headers={
+            "apikey": service_key,
+            "Authorization": f"Bearer {service_key}",
+            "Content-Type": "application/json",
+            "Prefer": "resolution=merge-duplicates,missing=default,return=minimal",
+        },
+        json=records,
+        timeout=60,
+    )
+    response.raise_for_status()
+
+
+def fetch_storefront_records(supabase_url, service_key):
+    response = requests.get(
+        f"{supabase_url.rstrip('/')}/rest/v1/fadewell_storefront_products",
+        headers={"apikey": service_key, "Authorization": f"Bearer {service_key}"},
+        params={
+            "select": "vinted_item_id,title,brand,size_label,condition_label,photos,price_pln,vinted_url,published,publication_notes",
+            "limit": "1000",
+        },
+        timeout=60,
+    )
+    response.raise_for_status()
+    return response.json()
+
+
+def sync_hq_catalog_metadata(supabase_url, service_key, observations):
+    """Refresh safe live HQ metadata from the same catalog read."""
+    rows = [{
+        "vinted_item_id": row["vinted_item_id"],
+        "title": row.get("title"),
+        "price_pln": row.get("price_pln"),
+        "photo_url": (row.get("photos") or [None])[0],
+    } for row in observations]
+    response = requests.post(
+        f"{supabase_url.rstrip('/')}/rest/v1/rpc/sync_hq_live_listing_metadata",
+        headers={
+            "apikey": service_key,
+            "Authorization": f"Bearer {service_key}",
+            "Content-Type": "application/json",
+        },
+        json={"p": rows},
+        timeout=60,
+    )
+    response.raise_for_status()
+    return response.json()
+
+
+def record_storefront_sync_result(
+    supabase_url, service_key, success, *, catalog_count=None, detail_deferred=None, error=None,
+):
+    response = requests.post(
+        f"{supabase_url.rstrip('/')}/rest/v1/rpc/record_fadewell_storefront_sync",
+        headers={
+            "apikey": service_key,
+            "Authorization": f"Bearer {service_key}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "p_success": bool(success),
+            "p_catalog_count": catalog_count,
+            "p_detail_deferred": detail_deferred,
+            "p_error": str(error)[:2000] if error else None,
+        },
+        timeout=60,
+    )
+    response.raise_for_status()
+
+
 def fetch_recent_sold_ledger_items(supabase_url, service_key, sold_since):
     if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(sold_since or "")):
         raise ValueError("archive cutoff must be an ISO date")

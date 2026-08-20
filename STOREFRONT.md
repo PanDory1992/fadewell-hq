@@ -6,12 +6,14 @@ evidence, owner data, or other accounting fields.
 
 ## Data flow
 
-1. `.github/workflows/storefront-sync.yml` runs hourly and can also be started
+1. `.github/workflows/storefront-sync.yml` runs every 15 minutes and can also be started
    manually. After a successful sync it dispatches `storefront-updated` to the
    public site repository, which starts a build immediately. The site's hourly
    schedule remains as a fallback.
-2. `cloud/storefront_live_sync.py` reads the complete live wardrobe and Vinted
-   detail records.
+2. `cloud/storefront_live_sync.py` reads the live wardrobe once, immediately
+   updates cheap catalogue facts, and enriches only new, changed, incomplete or
+   rotating cached records from detail pages. A detail-page block preserves the
+   last complete description, measurements and gallery and resumes later.
 3. `cloud/storefront_sync.py` accepts only Vinted category evidence for the
    jeans/trousers scope, parses measurements deterministically, and writes the
    whitelisted `fadewell_storefront_products` table.
@@ -43,8 +45,9 @@ detail or gallery failure cannot interrupt ledger snapshots or reconciliation.
 ## Availability states
 
 - A listing returned by the current Vinted wardrobe is `available`.
-- A listing absent from the wardrobe becomes unavailable but is not called
-  sold.
+- A listing absent from one wardrobe response is unchanged. Absence is not
+  evidence of a sale, deletion or hidden state; explicit HQ sale and Storefront
+  visibility actions own those decisions.
 - Only a canonical `SOLD` state in `hq_ledger_items` marks the public record as
   sold and moves it into the Pair Archive.
 - Published sold records are retained permanently.
