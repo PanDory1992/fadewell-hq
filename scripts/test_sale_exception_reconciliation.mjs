@@ -13,7 +13,7 @@ assert.match(migration, /select public\.record_hq_vinted_transaction_states\(\);
 assert.doesNotMatch(migration, /apply_hq_ledger_action|insert into hq_ledger_events/i);
 assert.match(operations, /row\.item_title/);
 assert.match(operations, /mail\.google\.com\/mail\/u\/0\/\#all/);
-assert.match(operations, /hq\.js\?v=20260809-live-title/);
-assert.match(hq, /fadewell-hq-data-v4/);
+assert.match(operations, /hq\.js\?v=20260820-hidden-missing/);
+assert.match(hq, /fadewell-hq-data-v5/);
 
 console.log('sale exception reconciliation checks passed');
