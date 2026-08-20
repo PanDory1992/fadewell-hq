@@ -26,6 +26,12 @@ jobs:
         run: node scripts/check_mojibake.mjs .
       - name: Check sale exception reconciliation
         run: node scripts/test_sale_exception_reconciliation.mjs
+      - name: Check Gmail intake hardening
+        run: |
+          node scripts/test_confirmation_needed_gmail_parser.mjs
+          node scripts/test_gmail_sync_cursor.mjs
+          node scripts/test_gmail_oauth_callback.mjs
+          python -m unittest cloud.test_gmail_sync_watchdog
       - name: Check relist pending state machine
         run: node scripts/test_relist_contract.mjs
       - name: Check operations state visibility

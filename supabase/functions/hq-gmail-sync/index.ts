@@ -12,6 +12,8 @@ import { VINTED_PARSER_VERSION, nonEmptyLines, parseVintedMail } from './vinted-
 
 const PARSER_VERSION = VINTED_PARSER_VERSION;
 const REDACTION_VERSION = 'v1';
+const GMAIL_MODIFY_SCOPE = 'https://www.googleapis.com/auth/gmail.modify';
+const HISTORY_FALLBACK_OVERLAP_SECONDS = 60 * 60;
 const norm = (v: string | null | undefined) => (v || '').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, ' ').trim();
 const decode = (value: string) => new TextDecoder().decode(Uint8Array.from(atob(value.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0)));
 const stripHtml = (value: string) => value
@@ -67,35 +69,93 @@ Deno.serve(async (request) => {
   if (request.method !== 'POST') return reply({ error: 'Method not allowed.' }, 405);
   const startedAt = new Date().toISOString();
   let runId: string | null = null;
-  let scanned = 0, received = 0, applied = 0, review = 0, noise = 0;
+  let scanned = 0, received = 0, applied = 0, review = 0, noise = 0, trashed = 0;
   try {
     const runningSince = new Date(Date.now() - 10 * 60 * 1000).toISOString();
     const running = await readJson(await rest(`hq_email_sync_runs?provider=eq.gmail&status=eq.RUNNING&started_at=gt.${encodeURIComponent(runningSince)}&select=id&limit=1`), 'Gmail sync concurrency check');
     if (running?.[0]) return reply({ status: 'already_running' }, 202);
     await patchSyncState({ last_attempt_at: startedAt, last_error: null });
     runId = await createSyncRun();
-    const connection = await readJson(await rest('hq_email_connections?provider=eq.gmail&select=refresh_token'), 'Gmail connection lookup');
+    const connection = await readJson(await rest('hq_email_connections?provider=eq.gmail&select=refresh_token,scopes'), 'Gmail connection lookup');
     if (!connection?.[0]) throw new Error('Gmail is not connected.');
-    const state = await readJson(await rest('hq_email_sync_state?provider=eq.gmail&select=started_at,last_success_at'), 'Gmail cursor lookup');
+    const state = await readJson(await rest('hq_email_sync_state?provider=eq.gmail&select=started_at,last_success_at,history_id,trash_backfill_completed_at'), 'Gmail cursor lookup');
     if (!state?.[0]?.started_at) throw new Error('Gmail baseline is not set.');
     const tokenResponse = await fetch('https://oauth2.googleapis.com/token', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: connection[0].refresh_token, client_id: Deno.env.get('GMAIL_CLIENT_ID')!, client_secret: Deno.env.get('GMAIL_CLIENT_SECRET')! }) });
     const token = await readJson(tokenResponse, 'Gmail token refresh');
     if (!token.access_token) throw new Error('Gmail token refresh returned no access token.');
-    const gmail = async (path: string) => readJson(await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/${path}`, { headers: { authorization: `Bearer ${token.access_token}` } }), `Gmail API ${path.split('?')[0]}`);
-    const after = Math.floor(new Date(state[0].last_success_at || state[0].started_at).getTime() / 1000);
-    const refs: Array<{ id: string }> = [];
-    let pageToken = '';
-    do {
-      const params = new URLSearchParams({ q: `from:no-reply@vinted.pl after:${after}`, maxResults: '100' });
-      if (pageToken) params.set('pageToken', pageToken);
-      const listing = await gmail(`messages?${params.toString()}`);
-      refs.push(...(listing.messages || []));
-      pageToken = listing.nextPageToken || '';
-    } while (pageToken);
+    const gmail = async (path: string, init: RequestInit = {}) => {
+      const response = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/${path}`, { ...init, headers: { authorization: `Bearer ${token.access_token}`, ...(init.headers || {}) } });
+      const payload = await response.json();
+      if (!response.ok) {
+        const error = new Error(`Gmail API ${path.split('?')[0]} failed: ${JSON.stringify(payload)}`) as Error & { status?: number };
+        error.status = response.status;
+        throw error;
+      }
+      return payload;
+    };
+    const canModify = Array.isArray(connection[0].scopes) && connection[0].scopes.includes(GMAIL_MODIFY_SCOPE);
+    await patchSyncState({
+      can_modify: canModify,
+      last_warning: canModify ? null : 'Reconnect Gmail to grant permission for moving Confirmation needed messages to Trash.'
+    });
+
+    const refsById = new Map<string, { id: string }>();
+    let nextHistoryId: string | null = state[0].history_id || null;
+    let historyCursorWorked = false;
+    if (state[0].history_id) {
+      try {
+        let pageToken = '';
+        do {
+          const params = new URLSearchParams({ startHistoryId: state[0].history_id, historyTypes: 'messageAdded', maxResults: '100' });
+          if (pageToken) params.set('pageToken', pageToken);
+          const history = await gmail(`history?${params.toString()}`);
+          for (const entry of history.history || []) for (const added of entry.messagesAdded || []) {
+            if (added.message?.id) refsById.set(added.message.id, { id: added.message.id });
+          }
+          nextHistoryId = history.historyId || nextHistoryId;
+          pageToken = history.nextPageToken || '';
+        } while (pageToken);
+        historyCursorWorked = true;
+      } catch (error) {
+        if ((error as Error & { status?: number }).status !== 404) throw error;
+        console.warn('Gmail history cursor expired; using bounded timestamp replay.');
+      }
+    }
+    if (!historyCursorWorked) {
+      const profile = await gmail('profile');
+      nextHistoryId = profile.historyId || nextHistoryId;
+      const baseline = new Date(state[0].last_success_at || state[0].started_at).getTime();
+      const overlap = state[0].last_success_at ? HISTORY_FALLBACK_OVERLAP_SECONDS * 1000 : 0;
+      const after = Math.floor((baseline - overlap) / 1000);
+      let pageToken = '';
+      do {
+        const params = new URLSearchParams({ q: `in:anywhere from:no-reply@vinted.pl after:${after}`, maxResults: '100' });
+        if (pageToken) params.set('pageToken', pageToken);
+        const listing = await gmail(`messages?${params.toString()}`);
+        for (const ref of listing.messages || []) refsById.set(ref.id, ref);
+        pageToken = listing.nextPageToken || '';
+      } while (pageToken);
+    }
+
+    const runTrashBackfill = canModify && !state[0].trash_backfill_completed_at;
+    if (runTrashBackfill) {
+      let pageToken = '';
+      do {
+        const params = new URLSearchParams({ q: 'in:anywhere from:no-reply@vinted.pl newer_than:30d "Confirmation needed"', maxResults: '100' });
+        if (pageToken) params.set('pageToken', pageToken);
+        const listing = await gmail(`messages?${params.toString()}`);
+        for (const ref of listing.messages || []) refsById.set(ref.id, ref);
+        pageToken = listing.nextPageToken || '';
+      } while (pageToken);
+    }
+    const refs = [...refsById.values()];
     const ledger = await readJson(await rest('hq_ledger_items?select=item_id,name,live_title,ledger_status&limit=1000'), 'HQ ledger lookup');
     scanned = refs.length;
     for(const ref of refs) {
-    const message=await gmail(`messages/${ref.id}?format=full`); const h=(name:string)=>message.payload.headers.find((x:any)=>x.name?.toLowerCase()===name)?.value||''; const subject=h('subject'), from=h('from'), body=text(message.payload); const trusted=/(?:^|<)no-reply@vinted\.pl>?\s*$/i.test(from.trim()); const receivedAt=new Date(Number(message.internalDate)).toISOString();
+    let message;
+    try { message=await gmail(`messages/${ref.id}?format=full`); }
+    catch(error) { if((error as Error & {status?:number}).status===404) continue; throw error; }
+    const h=(name:string)=>message.payload.headers.find((x:any)=>x.name?.toLowerCase()===name)?.value||''; const subject=h('subject'), from=h('from'), body=text(message.payload); const trusted=/(?:^|<)no-reply@vinted\.pl>?\s*$/i.test(from.trim()); const receivedAt=new Date(Number(message.internalDate)).toISOString();
     const parsed=trusted?parseVintedMail({subject,body}):parseVintedMail({subject:'',body:''});
     const event_type=parsed.event_type,item_title=parsed.item_title,amount=parsed.amount,transaction=parsed.transaction_id,bundleItems=parsed.bundle_items;
     // A machine may book a sale only against a DEN that is actually LISTED on Vinted.
@@ -125,18 +185,30 @@ Deno.serve(async (request) => {
       resolvedState=reconciliationOutcome.state||resolvedState;
     }
     const transactionResponse=await rest('rpc/reconcile_hq_vinted_transaction_message',{method:'POST',body:JSON.stringify({p_message_id:ref.id})}); if(!transactionResponse.ok) throw new Error(`Vinted transaction evidence ${ref.id} was not reconciled: ${await transactionResponse.text()}`);
+    if(parsed.template_id==='confirmation_needed_trash_en_v1'&&canModify){
+      try {
+        await gmail(`messages/${ref.id}/trash`,{method:'POST'});
+        const trashRecorded=await rest('rpc/record_hq_gmail_trash_result',{method:'POST',body:JSON.stringify({p_message_id:ref.id,p_succeeded:true,p_error:null})});
+        if(!trashRecorded.ok)throw new Error(`Gmail Trash audit ${ref.id} was not recorded: ${await trashRecorded.text()}`);
+        trashed++;
+      } catch(error) {
+        const message=String(error instanceof Error?error.message:error).slice(0,500);
+        await rest('rpc/record_hq_gmail_trash_result',{method:'POST',body:JSON.stringify({p_message_id:ref.id,p_succeeded:false,p_error:message})});
+        throw error;
+      }
+    }
     if(!outcome.duplicate){received++;if(resolvedState==='AUTO_APPLIED')applied++;else if(resolvedState==='AUTO_DISMISSED')noise++;else if(resolvedState==='NEEDS_REVIEW')review++;}
     }
     const finishedAt = new Date().toISOString();
-    await patchSyncState({ last_success_at: finishedAt, last_finished_at: finishedAt, last_error: null, last_scanned_count: scanned, last_received_count: received, last_applied_count: applied, last_review_count: review, last_noise_count: noise });
-    await finishSyncRun(runId, { status: 'SUCCEEDED', finished_at: finishedAt, scanned_count: scanned, received_count: received, applied_count: applied, review_count: review, noise_count: noise, error: null });
-    return reply({ scanned, received, applied, review, noise });
+    await patchSyncState({ last_success_at: finishedAt, last_finished_at: finishedAt, last_error: null, history_id: nextHistoryId, last_scanned_count: scanned, last_received_count: received, last_applied_count: applied, last_review_count: review, last_noise_count: noise, last_trashed_count: trashed, ...(runTrashBackfill ? { trash_backfill_completed_at: finishedAt } : {}) });
+    await finishSyncRun(runId, { status: 'SUCCEEDED', finished_at: finishedAt, scanned_count: scanned, received_count: received, applied_count: applied, review_count: review, noise_count: noise, trashed_count: trashed, error: null });
+    return reply({ scanned, received, applied, review, noise, trashed });
   } catch (error) {
     const finishedAt = new Date().toISOString();
     const message = String(error instanceof Error ? error.message : error).slice(0, 2000);
     console.error('Gmail sync failed', message);
-    try { await patchSyncState({ last_finished_at: finishedAt, last_error: message, last_scanned_count: scanned, last_received_count: received, last_applied_count: applied, last_review_count: review, last_noise_count: noise }); } catch (healthError) { console.error('Could not record Gmail sync failure', String(healthError)); }
-    await finishSyncRun(runId, { status: 'FAILED', finished_at: finishedAt, scanned_count: scanned, received_count: received, applied_count: applied, review_count: review, noise_count: noise, error: message });
-    return reply({ error: message, scanned, received, applied, review, noise }, 500);
+    try { await patchSyncState({ last_finished_at: finishedAt, last_error: message, last_scanned_count: scanned, last_received_count: received, last_applied_count: applied, last_review_count: review, last_noise_count: noise, last_trashed_count: trashed }); } catch (healthError) { console.error('Could not record Gmail sync failure', String(healthError)); }
+    await finishSyncRun(runId, { status: 'FAILED', finished_at: finishedAt, scanned_count: scanned, received_count: received, applied_count: applied, review_count: review, noise_count: noise, trashed_count: trashed, error: message });
+    return reply({ error: message, scanned, received, applied, review, noise, trashed }, 500);
   }
 });

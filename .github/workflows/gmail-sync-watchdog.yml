@@ -1,0 +1,29 @@
+name: Gmail Intake Watchdog
+
+on:
+  schedule:
+    - cron: '7,22,37,52 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gmail-intake-watchdog
+  cancel-in-progress: false
+
+jobs:
+  recover-if-stale:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: pip install --disable-pip-version-check requests
+      - name: Recover only when the five-minute Gmail sync is stale
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python cloud/gmail_sync_watchdog.py

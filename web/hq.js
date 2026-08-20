@@ -43,6 +43,7 @@ export async function shell(active){
   const {data:owner,error}=await sb.rpc('claim_first_hq_owner');
   if(error||!owner){$('status').textContent=error?.message||'To konto nie ma dostępu ownera.';return false;}
   $('login').hidden=true;$('logout').hidden=false;$('status').textContent=session.user.email||'HQ owner';
+  if(active==='system.html')setTimeout(async()=>{const{data:state}=await sb.from('hq_email_sync_state').select('can_modify,last_warning').eq('provider','gmail').maybeSingle();if(!state||state.can_modify===true||document.querySelector('[data-gmail-modify-consent]'))return;const host=document.getElementById('gmail-health');if(!host)return;host.insertAdjacentHTML('afterbegin','<div class="feed-item notice" data-gmail-modify-consent><b>Jednorazowa zgoda dla Kosza Gmail</b><p class="muted small">Odczyt działa. Aby maile „Confirmation needed” trafiały również do prawdziwego Kosza Gmaila, połącz konto ponownie i zaakceptuj uprawnienie do przenoszenia wiadomości.</p><p class="gmail-action"><a class="button" href="https://qgjkxtolyhbwpvncwtkn.supabase.co/functions/v1/hq-gmail-oauth/authorize">Połącz Gmail ponownie</a></p></div>')},900);
   document.addEventListener('hq:data-refreshed',()=>{const status=$('status');if(status)status.textContent='Dane HQ zaktualizowane';if(active==='index.html'&&!sessionStorage.getItem('hq-home-refreshed')){sessionStorage.setItem('hq-home-refreshed','1');setTimeout(()=>location.reload(),250)}},{once:true});
   return true;
 }

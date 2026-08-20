@@ -3,7 +3,7 @@ const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const clientId = Deno.env.get('GMAIL_CLIENT_ID')!;
 const clientSecret = Deno.env.get('GMAIL_CLIENT_SECRET')!;
 const redirectUri = `${projectUrl}/functions/v1/hq-gmail-oauth/callback`;
-const gmailScope = 'https://www.googleapis.com/auth/gmail.readonly';
+const gmailScope = 'https://www.googleapis.com/auth/gmail.modify';
 const hqSystemUrl = 'https://hq.fadewell.eu/system.html';
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json; charset=utf-8' } });
@@ -32,11 +32,19 @@ Deno.serve(async (request) => {
   const profileResponse = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/profile', { headers: { authorization: `Bearer ${token.access_token}` } });
   const profile = await profileResponse.json();
   if (!profileResponse.ok || profile.emailAddress !== 'falka.falka35@gmail.com') return json({ error: 'Only falka.falka35@gmail.com may be connected.' }, 403);
+  const grantedScopes = String(token.scope || gmailScope).split(/\s+/).filter(Boolean);
+  const canModify = grantedScopes.includes(gmailScope);
+  if (!canModify) return json({ error: 'Gmail modify permission was not granted.' }, 403);
   const saved = await fetch(`${projectUrl}/rest/v1/hq_email_connections?on_conflict=provider`, {
     method: 'POST', headers: { apikey: serviceKey, authorization: `Bearer ${serviceKey}`, 'content-type': 'application/json', prefer: 'resolution=merge-duplicates' },
-    body: JSON.stringify({ provider: 'gmail', email: profile.emailAddress, refresh_token: token.refresh_token, scopes: [gmailScope], updated_at: new Date().toISOString() })
+    body: JSON.stringify({ provider: 'gmail', email: profile.emailAddress, refresh_token: token.refresh_token, scopes: grantedScopes, updated_at: new Date().toISOString() })
   });
   if (!saved.ok) return json({ error: 'Could not store the private Gmail connection.' }, 500);
+  const state = await fetch(`${projectUrl}/rest/v1/hq_email_sync_state?provider=eq.gmail`, {
+    method: 'PATCH', headers: { apikey: serviceKey, authorization: `Bearer ${serviceKey}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ can_modify: true, last_warning: null, trash_backfill_completed_at: null, updated_at: new Date().toISOString() })
+  });
+  if (!state.ok) return json({ error: 'Could not update Gmail permission state.' }, 500);
 
   // Start a verification run now, rather than making the owner wait for the five-minute schedule.
   // The sync function records its own result; a callback failure must never undo a valid OAuth connection.
