@@ -116,12 +116,12 @@ def finish_collector_run(run_id, success, captured_at=None, item_count=None, err
     return response.json()
 
 def eligible_unlisted_items():
-    response = requests.get(f"{SUPABASE_URL}/rest/v1/hq_ledger_items", headers={"apikey": SERVICE_KEY, "Authorization": f"Bearer {SERVICE_KEY}"}, params={"select":"item_id,name,category,advantage,estimate_sale_price", "ledger_status":"eq.UNLISTED-BACKLOG", "vinted_item_id":"is.null", "limit":"1000"}, timeout=60)
+    response = requests.get(f"{SUPABASE_URL}/rest/v1/hq_ledger_items", headers={"apikey": SERVICE_KEY, "Authorization": f"Bearer {SERVICE_KEY}"}, params={"select":"item_id,name,manual_title,category,advantage,estimate_sale_price", "ledger_status":"eq.UNLISTED-BACKLOG", "vinted_item_id":"is.null", "limit":"1000"}, timeout=60)
     response.raise_for_status()
     return response.json()
 
 def eligible_relist_items(active_vinted_ids):
-    response = requests.get(f"{SUPABASE_URL}/rest/v1/hq_ledger_items", headers={"apikey": SERVICE_KEY, "Authorization": f"Bearer {SERVICE_KEY}"}, params={"select":"item_id,name,category,advantage,estimate_sale_price,vinted_item_id,live_title", "ledger_status":"eq.LISTED-BACKLOG", "vinted_item_id":"not.is.null", "limit":"1000"}, timeout=60)
+    response = requests.get(f"{SUPABASE_URL}/rest/v1/hq_ledger_items", headers={"apikey": SERVICE_KEY, "Authorization": f"Bearer {SERVICE_KEY}"}, params={"select":"item_id,name,manual_title,category,advantage,estimate_sale_price,vinted_item_id,live_title,storefront_hidden", "ledger_status":"eq.LISTED-BACKLOG", "vinted_item_id":"not.is.null", "storefront_hidden":"eq.false", "limit":"1000"}, timeout=60)
     response.raise_for_status()
     return [item for item in response.json() if str(item["vinted_item_id"]) not in active_vinted_ids]
 
@@ -164,6 +164,7 @@ def fetch_new_listing_description(vinted_id):
 
 def auto_link(match, listing):
     item = match["item"]; vinted_id = str(listing["id"]); external_key = f"auto-resolver-link-{vinted_id}"
+    previous_title = item.get("manual_title") or item.get("name") or item.get("live_title") or item["item_id"]
     relist = bool(item.get("vinted_item_id") and str(item["vinted_item_id"]) != vinted_id)
     if relist:
         payload = {
@@ -172,7 +173,7 @@ def auto_link(match, listing):
             "occurred_on": datetime.now(timezone.utc).date().isoformat(), "amount": amount(listing.get("price")),
             "listing_url": f"https://www.vinted.pl/items/{vinted_id}", "live_title": listing.get("title"),
             "external_key": f"auto-relist-{item['vinted_item_id']}-{vinted_id}",
-            "evidence": {"score": match["score"], "reasons": match["reasons"], "resolver": "conservative-v2"},
+            "evidence": {"score": match["score"], "reasons": match["reasons"], "resolver": "conservative-v4", "previous_ledger_title": previous_title, "previous_vinted_title": item.get("live_title"), "new_vinted_title": listing.get("title")},
         }
         response = requests.post(f"{SUPABASE_URL}/rest/v1/rpc/apply_hq_system_relist", headers={"apikey": SERVICE_KEY, "Authorization": f"Bearer {SERVICE_KEY}", "Content-Type": "application/json"}, json={"p": payload}, timeout=60)
         response.raise_for_status()
@@ -182,7 +183,7 @@ def auto_link(match, listing):
             return
         print(f"Auto-relisted {item['vinted_item_id']} -> {vinted_id} for {item['item_id']}")
         return
-    payload = {"action_type":"LISTED", "item_id":item["item_id"], "occurred_on":datetime.now(timezone.utc).date().isoformat(), "amount":amount(listing.get("price")), "vinted_item_id":vinted_id, "listing_url":f"https://www.vinted.pl/items/{vinted_id}", "live_title":listing.get("title"), "note":f"SYSTEM {'relist' if relist else 'auto-resolver'}: score {match['score']}; {'; '.join(match['reasons'])}", "source":"SYSTEM", "external_key":external_key, "relist":relist}
+    payload = {"action_type":"LISTED", "item_id":item["item_id"], "occurred_on":datetime.now(timezone.utc).date().isoformat(), "amount":amount(listing.get("price")), "vinted_item_id":vinted_id, "listing_url":f"https://www.vinted.pl/items/{vinted_id}", "live_title":listing.get("title"), "note":f"SYSTEM auto-resolver: tytuł w Ledger przed Vinted: „{previous_title}” → „{listing.get('title') or 'brak tytułu'}”; score {match['score']}; {'; '.join(match['reasons'])}", "source":"SYSTEM", "external_key":external_key, "relist":False}
     response = requests.post(f"{SUPABASE_URL}/rest/v1/rpc/apply_hq_ledger_action", headers={"apikey": SERVICE_KEY, "Authorization": f"Bearer {SERVICE_KEY}", "Content-Type":"application/json"}, json={"p": payload}, timeout=60)
     response.raise_for_status()
     print(f"Auto-linked {vinted_id} -> {item['item_id']} ({match['score']}: {', '.join(match['reasons'])})")

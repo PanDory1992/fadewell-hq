@@ -64,6 +64,28 @@ class ListingResolverTests(unittest.TestCase):
         result = best_match(listing, candidates)
         self.assertFalse(result["auto"])
 
+    def test_manual_ledger_title_beats_a_wrong_relist_with_conflicting_length(self):
+        listing = {"title": "Levi’s 501 Original Fit Button Fly Jeans - Dark Indigo - W32 L32 - 2006 Red Tab", "price_pln": 189}
+        hidden_wrong_relist = item("DEN-093", "Levis 501 32/30 Puchate PL", 150)
+        hidden_wrong_relist.update({
+            "vinted_item_id": "9342042409",
+            "live_title": "Levi’s 501 Original Fit Jeans - Dark Indigo - W32 L30 - Vintage Made in Poland 2002",
+            "storefront_hidden": True,
+        })
+        correct_unlisted = item("DEN-274", "spodnie levis", 160)
+        correct_unlisted["manual_title"] = "Levis 501 Dark Blue Indigo 32/32 Perfect"
+        result = best_match(listing, [hidden_wrong_relist, correct_unlisted])
+        self.assertTrue(result["auto"])
+        self.assertEqual(result["item"]["item_id"], "DEN-274")
+
+    def test_relist_with_conflicting_length_never_autolinks(self):
+        listing = {"title": "Levi’s 501 Original Fit Jeans - Dark Indigo - W32 L32", "price_pln": 189}
+        candidate = item("DEN-093", "Levis 501 32/30 Puchate PL", 150)
+        candidate.update({"vinted_item_id": "9342042409", "live_title": "Levi’s 501 Original Fit Jeans - Dark Indigo - W32 L30"})
+        result = best_match(listing, [candidate])
+        self.assertFalse(result["auto"])
+        self.assertIn("sprzeczny pełny rozmiar", result["reasons"])
+
     def test_marker_normalizes_den_identifier(self):
         self.assertEqual(marker("Proof #DEN-00123"), "DEN-123")
 

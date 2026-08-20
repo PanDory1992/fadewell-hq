@@ -59,7 +59,7 @@ def marker(value: Any) -> str | None:
 
 def score(listing: dict[str, Any], item: dict[str, Any]) -> dict[str, Any]:
     listing_text = f"{listing.get('title', '')} {listing.get('description', '')}"
-    item_text = f"{item.get('name', '')} {item.get('live_title', '')} {item.get('category', '')} {item.get('advantage', '')}"
+    item_text = f"{item.get('name', '')} {item.get('manual_title', '')} {item.get('live_title', '')} {item.get('category', '')} {item.get('advantage', '')}"
     direct = marker(listing_text)
     if direct and direct == item.get("item_id"):
         return {"item": item, "score": 1000, "reasons": ["marker #den"]}
@@ -104,10 +104,19 @@ def score(listing: dict[str, Any], item: dict[str, Any]) -> dict[str, Any]:
     except (TypeError, ValueError, ZeroDivisionError):
         pass
     same_sizes = listing_sizes & item_sizes
+    listing_waists = {value for value in listing_sizes if value.startswith("w")}
+    item_waists = {value for value in item_sizes if value.startswith("w")}
+    listing_lengths = {value for value in listing_sizes if value.startswith("l")}
+    item_lengths = {value for value in item_sizes if value.startswith("l")}
+    conflicting_size = bool(listing_waists and item_waists and not listing_waists & item_waists) or bool(listing_lengths and item_lengths and not listing_lengths & item_lengths)
+    if conflicting_size:
+        points -= 60
+        reasons.append("sprzeczny pełny rozmiar")
     complete_size = any(value.startswith("w") for value in same_sizes) and any(value.startswith("l") for value in same_sizes)
     aligned_relist_attribute = bool(listing_colours & item_colours) or bool(listing_countries & item_countries)
-    relist_strong = bool(item.get("vinted_item_id")) and complete_size and len(shared) >= 4 and aligned_relist_attribute
-    strong = (bool(same_sizes) and bool(listing_models & item_models)) or relist_strong
+    relist_strong = bool(item.get("vinted_item_id")) and complete_size and len(shared) >= 4 and aligned_relist_attribute and not conflicting_size
+    new_listing_strong = not item.get("vinted_item_id") and complete_size and bool(listing_models & item_models) and not conflicting_size
+    strong = relist_strong if item.get("vinted_item_id") else new_listing_strong
     if relist_strong:
         reasons.append("jednoznaczny profil relistu")
     return {"item": item, "score": points, "reasons": reasons, "strong": strong}

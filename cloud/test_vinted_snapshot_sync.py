@@ -138,6 +138,23 @@ class SnapshotPaginationTests(unittest.TestCase):
         with patch.object(sync.requests, "get", side_effect=responses):
             self.assertEqual(sync.known_den_listing_ids(), {"1", "2"})
 
+    def test_relist_candidates_exclude_owner_hidden_items(self):
+        response = RequestsResponse([])
+        with patch.object(sync.requests, "get", return_value=response) as get:
+            sync.eligible_relist_items({"9719056890"})
+        self.assertEqual(get.call_args.kwargs["params"]["storefront_hidden"], "eq.false")
+        self.assertIn("manual_title", get.call_args.kwargs["params"]["select"])
+
+    def test_auto_link_records_the_title_before_vinted(self):
+        match = {"item": {"item_id": "DEN-237", "name": "Levis 505 32/32 TR Nice Whiskering Cotton"}, "score": 106, "reasons": ["zgodny model 505"]}
+        listing = {"id": "9720315530", "title": "Levi’s 505 Regular Straight Zip Fly Jeans W32 L32", "price": {"amount": "179.00"}}
+        response = SimpleNamespace(raise_for_status=lambda: None)
+        with patch.object(sync.requests, "post", return_value=response) as post:
+            sync.auto_link(match, listing)
+        note = post.call_args.kwargs["json"]["p"]["note"]
+        self.assertIn("tytuł w Ledger przed Vinted", note)
+        self.assertIn("Levis 505 32/32 TR Nice Whiskering Cotton", note)
+
 
 if __name__ == "__main__":
     unittest.main()

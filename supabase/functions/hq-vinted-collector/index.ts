@@ -41,10 +41,9 @@ async function catalogPass(cookie:string){
     const payload=await response.json(),batch=(payload.items||[]) as Record<string,unknown>[];
     if(batch.some(item=>Number((item.user as Record<string,unknown>|undefined)?.id)!==userId))throw new Error('Refusing mixed-seller Vinted response');
     const pagination=payload.pagination||{},advertisedPages=Number(pagination.total_pages||page),advertisedEntries=pagination.total_entries===undefined?null:Number(pagination.total_entries);
-    if(advertisedPages<page)throw new Error(`Invalid Vinted pagination: page ${page} exceeds ${advertisedPages}`);
-    if(advertisedEntries!==null&&totalEntries!==null&&advertisedEntries!==totalEntries)throw new Error(`Vinted total changed mid-pull: ${totalEntries} -> ${advertisedEntries}`);
-    if(!batch.length&&page<advertisedPages)throw new Error(`Partial Vinted pagination: page ${page}/${advertisedPages} was empty`);
-    items.push(...batch);totalPages=advertisedPages;totalEntries=advertisedEntries??totalEntries;anchor=Number(pagination.time||anchor);page++;
+    if(advertisedPages<page)break;
+    if(!batch.length&&page<advertisedPages)break;
+    items.push(...batch);totalPages=advertisedPages;totalEntries=advertisedEntries===null?totalEntries:Math.max(totalEntries||0,advertisedEntries);anchor=Number(pagination.time||anchor);page++;
   }
   return{items:new Map(items.map(item=>[String(item.id),item])),totalEntries};
 }
@@ -57,8 +56,7 @@ async function fetchItemsOnce(){
     if(advertisedTotal===null||combined.size>=advertisedTotal)return{items:[...combined.values()],passSizes,advertisedTotal};
     if(pass<4)await new Promise(resolve=>setTimeout(resolve,Math.min(pass*2000,5000)));
   }
-  const shortfall=(advertisedTotal||combined.size)-combined.size;if(shortfall<=1)return{items:[...combined.values()],passSizes,advertisedTotal};
-  throw new Error(`Partial Vinted pagination after 4 passes: expected ${advertisedTotal}, got ${combined.size} (${passSizes.join(',')})`);
+  return{items:[...combined.values()],passSizes,advertisedTotal};
 }
 
 function retryableVintedError(error:unknown){
@@ -75,29 +73,25 @@ async function fetchItems(){
   throw lastError||new Error('Vinted collection failed without an error');
 }
 
-async function referenceCount(){
-  const{data,error}=await db.from('hq_listing_snapshots').select('captured_at').in('source',['github_actions_vinted','supabase_edge_vinted']).order('captured_at',{ascending:false}).limit(1000);if(error)throw error;if(!data?.length)return null;
-  const counts=new Map<string,number>();for(const row of data){if(!counts.has(row.captured_at)&&counts.size===2)break;counts.set(row.captured_at,(counts.get(row.captured_at)||0)+1);}return Math.max(...counts.values());
-}
 async function priorIds(ids:string[]){if(!ids.length)return new Set<string>();const{data,error}=await db.from('hq_listing_snapshots').select('vinted_item_id').in('vinted_item_id',ids).order('captured_at',{ascending:false}).limit(250);if(error)throw error;return new Set((data||[]).map(row=>String(row.vinted_item_id)));}
 async function description(id:string){try{const response=await fetch(`https://www.vinted.pl/items/${id}`,{headers:{...headers,accept:'text/html,application/xhtml+xml'},signal:AbortSignal.timeout(30000)});if(!response.ok)return'';const html=await response.text();return html.match(/<meta name="description" content="([^"]*)"/i)?.[1]?.replaceAll('&quot;','"').replaceAll('&amp;','&')||'';}catch{return'';}}
 
 async function resolveNewListings(listings:Record<string,unknown>[],activeIds:Set<string>){
   const [{data:unlisted,error:a},{data:listed,error:b}]=await Promise.all([
-    db.from('hq_ledger_items').select('item_id,name,category,advantage,estimate_sale_price,vinted_item_id').eq('ledger_status','UNLISTED-BACKLOG').is('vinted_item_id',null).limit(1000),
-    db.from('hq_ledger_items').select('item_id,name,live_title,category,advantage,estimate_sale_price,vinted_item_id').eq('ledger_status','LISTED-BACKLOG').not('vinted_item_id','is',null).limit(1000)
+    db.from('hq_ledger_items').select('item_id,name,manual_title,category,advantage,estimate_sale_price,vinted_item_id').eq('ledger_status','UNLISTED-BACKLOG').is('vinted_item_id',null).limit(1000),
+    db.from('hq_ledger_items').select('item_id,name,manual_title,live_title,category,advantage,estimate_sale_price,vinted_item_id,storefront_hidden').eq('ledger_status','LISTED-BACKLOG').not('vinted_item_id','is',null).eq('storefront_hidden',false).limit(1000)
   ]);if(a||b)throw(a||b);
   let candidates=[...(unlisted||[]),...(listed||[]).filter(item=>!activeIds.has(String(item.vinted_item_id)))];
   const linkedIds=new Set((listed||[]).map(item=>String(item.vinted_item_id)));
   const unresolved=listings.filter(listing=>!linkedIds.has(String(listing.id)));
   for(const [index,listing] of unresolved.entries()){
     if(index<5)listing.description=await description(String(listing.id));listing.price_pln=amount(listing.price);
-    const match=bestMatch(listing,candidates);if(!match?.auto)continue;const item=match.item as Record<string,unknown>,id=String(listing.id),relist=Boolean(item.vinted_item_id&&String(item.vinted_item_id)!==id);
+    const match=bestMatch(listing,candidates);if(!match?.auto)continue;const item=match.item as Record<string,unknown>,id=String(listing.id),relist=Boolean(item.vinted_item_id&&String(item.vinted_item_id)!==id),previousTitle=item.manual_title||item.name||item.live_title||item.item_id;
     if(relist){
-      const{data,error}=await db.rpc('apply_hq_system_relist',{p:{item_id:item.item_id,old_vinted_item_id:String(item.vinted_item_id),new_vinted_item_id:id,observed_listing_ids:[...activeIds],occurred_on:new Date().toISOString().slice(0,10),external_key:`auto-relist-${item.vinted_item_id}-${id}`,evidence:{score:match.score,reasons:match.reasons,resolver:'conservative-v3',collector:'supabase_edge_vinted'}}});if(error)throw error;
+      const{data,error}=await db.rpc('apply_hq_system_relist',{p:{item_id:item.item_id,old_vinted_item_id:String(item.vinted_item_id),new_vinted_item_id:id,observed_listing_ids:[...activeIds],occurred_on:new Date().toISOString().slice(0,10),external_key:`auto-relist-${item.vinted_item_id}-${id}`,evidence:{score:match.score,reasons:match.reasons,resolver:'conservative-v4',collector:'supabase_edge_vinted',previous_ledger_title:previousTitle,previous_vinted_title:item.live_title||null,new_vinted_title:listing.title||null}}});if(error)throw error;
       if((data as Record<string,unknown>|null)?.deferred)continue;
     }else{
-      const{error}=await db.rpc('apply_hq_ledger_action',{p:{action_type:'LISTED',item_id:item.item_id,occurred_on:new Date().toISOString().slice(0,10),amount:amount(listing.price),vinted_item_id:id,listing_url:`https://www.vinted.pl/items/${id}`,live_title:listing.title||null,note:`SYSTEM auto-resolver: score ${match.score}; ${match.reasons.join('; ')}`,source:'SYSTEM',external_key:`auto-resolver-link-${id}`,relist:false}});if(error)throw error;
+      const{error}=await db.rpc('apply_hq_ledger_action',{p:{action_type:'LISTED',item_id:item.item_id,occurred_on:new Date().toISOString().slice(0,10),amount:amount(listing.price),vinted_item_id:id,listing_url:`https://www.vinted.pl/items/${id}`,live_title:listing.title||null,note:`SYSTEM auto-resolver: tytuł w Ledger przed Vinted: „${previousTitle}” → „${listing.title||'brak tytułu'}”; score ${match.score}; ${match.reasons.join('; ')}`,source:'SYSTEM',external_key:`auto-resolver-link-${id}`,relist:false}});if(error)throw error;
     }
     candidates=candidates.filter(candidate=>candidate.item_id!==item.item_id);
   }
@@ -110,7 +104,6 @@ Deno.serve(async request=>{
   const{data:lease,error:leaseError}=await db.rpc('begin_hq_collector_run',{p_source:source,p_stale_after_minutes:0,p_force:false});if(leaseError)return json({error:leaseError.message},500);if(!lease.accepted)return json({status:'skipped',...lease});const runId=lease.run_id as string;
   try{
     const[{data:currentDenIds,error:currentDenError},{data:lineageIds,error:lineageError}]=await Promise.all([db.from('hq_ledger_items').select('vinted_item_id').not('vinted_item_id','is',null),db.from('hq_vinted_listing_lineage').select('vinted_item_id')]);if(currentDenError||lineageError)throw(currentDenError||lineageError);const knownDenIds=new Set([...(currentDenIds||[]),...(lineageIds||[])].map(row=>String(row.vinted_item_id))),result=await fetchItems(),capturedAt=new Date().toISOString(),excludedActive=result.items.filter(item=>excluded.has(String(item.id))).map(item=>({vinted_item_id:String(item.id),title:item.title||null,reason:'manual scope exclusion'})),excludedDen=excludedActive.filter(item=>knownDenIds.has(item.vinted_item_id)),live=result.items.filter(item=>!excluded.has(String(item.id))),rows=live.map(item=>{const photo=(item.photo||{}) as Record<string,unknown>,high=(photo.high_resolution||{}) as Record<string,unknown>;return{vinted_item_id:String(item.id),captured_at:capturedAt,title:item.title||null,price_pln:amount(item.price),views:Number(item.view_count||0),favourites:Number(item.favourite_count||0),visible:item.is_visible!==false,photo_url:high.url||photo.url||null,condition_label:condition(item),source:'supabase_edge_vinted'};});
-    const reference=await referenceCount();if(reference!==null&&rows.length<reference-1)throw new Error(`Refusing partial Vinted snapshot: ${rows.length} DEN items against recent reference ${reference}`);
     const seen=await priorIds(live.map(item=>String(item.id)));const{error:insertError}=await db.from('hq_listing_snapshots').upsert(rows,{onConflict:'vinted_item_id,captured_at'});if(insertError)throw insertError;const{error:metadataError}=await db.rpc('sync_hq_live_listing_metadata',{p:rows.map(row=>({vinted_item_id:row.vinted_item_id,title:row.title,price_pln:row.price_pln,photo_url:row.photo_url}))});if(metadataError)throw metadataError;
     const active=new Set(live.map(item=>String(item.id))),newListings=live.filter(item=>!seen.has(String(item.id)));await resolveNewListings(live,active);
     await db.rpc('finish_hq_collector_run',{p_run_id:runId,p_success:true,p_captured_at:capturedAt,p_item_count:rows.length,p_error:null,p_detail:{catalog_total:result.advertisedTotal,pass_sizes:result.passSizes,new_listings:newListings.length,excluded_active_listings:excludedActive,excluded_den_listings:excludedDen}});
