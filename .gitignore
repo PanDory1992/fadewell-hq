@@ -3,3 +3,4 @@ __pycache__/
 .env
 backups/
 reports/
+supabase/.temp/
