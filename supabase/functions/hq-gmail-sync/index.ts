@@ -155,8 +155,12 @@ Deno.serve(async (request) => {
     let message;
     try { message=await gmail(`messages/${ref.id}?format=full`); }
     catch(error) { if((error as Error & {status?:number}).status===404) continue; throw error; }
-    const h=(name:string)=>message.payload.headers.find((x:any)=>x.name?.toLowerCase()===name)?.value||''; const subject=h('subject'), from=h('from'), body=text(message.payload); const trusted=/(?:^|<)no-reply@vinted\.pl>?\s*$/i.test(from.trim()); const receivedAt=new Date(Number(message.internalDate)).toISOString();
-    const parsed=trusted?parseVintedMail({subject,body}):parseVintedMail({subject:'',body:''});
+    const h=(name:string)=>message.payload.headers.find((x:any)=>x.name?.toLowerCase()===name)?.value||''; const subject=h('subject'), from=h('from'); const trusted=/(?:^|<)no-reply@vinted\.pl>?\s*$/i.test(from.trim());
+    // Gmail History is account-wide and cannot be filtered by sender. Never turn
+    // non-Vinted history entries into HQ evidence or resolver work.
+    if(!trusted) continue;
+    const body=text(message.payload); const receivedAt=new Date(Number(message.internalDate)).toISOString();
+    const parsed=parseVintedMail({subject,body});
     const event_type=parsed.event_type,item_title=parsed.item_title,amount=parsed.amount,transaction=parsed.transaction_id,bundleItems=parsed.bundle_items;
     // A machine may book a sale only against a DEN that is actually LISTED on Vinted.
     // LISTED-BACKLOG, not merely "not SOLD" - an unlisted item can never be auto-sold.
