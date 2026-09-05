@@ -10,15 +10,17 @@ export const date=value=>value?new Intl.DateTimeFormat('pl-PL',{dateStyle:'mediu
 export const pendingExternalReviews=events=>(events||[]).filter(event=>event.state==='NEEDS_REVIEW');
 export const toast=message=>{const el=document.createElement('div');el.className='toast';el.textContent=message;document.body.append(el);setTimeout(()=>el.remove(),2600)};
 export const installPreviousTitleProvenance=(container,getItems)=>{const render=()=>{const itemId=container.querySelector('.eyebrow')?.textContent,item=(getItems()||[]).find(row=>row.item_id===itemId),grid=container.querySelector('.detail-grid');if(!item?.live_title||!grid||grid.querySelector('[data-previous-ledger-title]'))return;const previous=String(item.manual_title||item.name||'').trim();if(!previous||previous===String(item.live_title).trim())return;grid.insertAdjacentHTML('beforeend',`<div data-previous-ledger-title><span class="muted small">Tytuł przed Vinted</span><br><b>${safe(previous)}</b></div>`);};new MutationObserver(render).observe(container,{childList:true,subtree:true});render();};
-const cacheKey='fadewell-hq-data-v5',cacheMaxAgeMs=2*60*60*1000;
-const cacheOpen=()=>new Promise((resolve,reject)=>{const request=indexedDB.open('fadewell-hq',2);request.onupgradeneeded=()=>{const db=request.result;if(db.objectStoreNames.contains('cache'))db.deleteObjectStore('cache');db.createObjectStore('cache')};request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)});
+const cacheKey='fadewell-hq-data-v6',cacheMaxAgeMs=2*60*60*1000;
+const cacheOpen=()=>new Promise((resolve,reject)=>{const request=indexedDB.open('fadewell-hq',3);request.onupgradeneeded=()=>{const db=request.result;if(db.objectStoreNames.contains('cache'))db.deleteObjectStore('cache');db.createObjectStore('cache')};request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)});
 const cacheDelete=async()=>{try{const db=await cacheOpen();await new Promise(resolve=>{const request=db.transaction('cache','readwrite').objectStore('cache').clear();request.onsuccess=request.onerror=resolve})}catch{}};
 const cacheGet=async()=>{try{const db=await cacheOpen();const cached=await new Promise(resolve=>{const request=db.transaction('cache').objectStore('cache').get(cacheKey);request.onsuccess=()=>resolve(request.result||null);request.onerror=()=>resolve(null)});if(cached?.savedAt&&Date.now()-cached.savedAt>cacheMaxAgeMs){await cacheDelete();return null}return cached}catch{return null}};
-const cachePut=async value=>{try{if(JSON.stringify(value).length>1500000)return;const db=await cacheOpen();await new Promise(resolve=>{const request=db.transaction('cache','readwrite').objectStore('cache').put(value,cacheKey);request.onsuccess=request.onerror=resolve})}catch{}};
+const cachePut=async value=>{try{const db=await cacheOpen();await new Promise(resolve=>{const request=db.transaction('cache','readwrite').objectStore('cache').put(value,cacheKey);request.onsuccess=request.onerror=resolve})}catch{}};
 const pack=data=>({...data,linked:[...(data.linked||new Map())]});
 const unpack=data=>({...data,linked:new Map(data.linked||[])});
 const changesSince=async cursor=>{const {data,error}=await sb.rpc('hq_browser_sync_changes_since',{p_after:Number(cursor||0)});if(error)throw error;return data||[]};
 const latestCursor=changes=>changes.length?Number(changes[changes.length-1].id):null;
+const changedEntities=changes=>new Set((changes||[]).map(change=>String(change.entity||'')));
+const loadSnapshotCycles=async()=>{const {data,error}=await sb.rpc('hq_browser_listing_cycles');if(error)throw error;return Array.isArray(data?.snapshots)?data.snapshots:[]};
 
 const pages=[['index.html','Dziś','today'],['operations.html','Sprawy','today'],['kpi.html','KPI','money'],['finance.html','Finanse','money'],['storefront.html','Storefront','growth'],['pricing.html','Ceny','money'],['ledger.html','Ledger','stock'],['wardrobe.html','Live wardrobe','stock'],['triage.html','Triage','stock'],['item-dna.html','Item DNA','stock'],['sourcing.html','Sourcing','stock'],['actions.html','Akcje','actions'],['system.html','System','system']];
 
@@ -48,30 +50,7 @@ export async function shell(active){
   return true;
 }
 
-async function loadData(){
-  const status=$('status');if(status)status.textContent='Wczytuję podstawowe dane HQ…';
-  const [{data:ledgerItems,error:ledgerError},{data:legacyItems,error:legacyError},{data:snapshots,error:snapshotsError},{data:reviews,error:reviewsError},{data:events,error:eventsError},{data:relistCandidates,error:relistCandidatesError}]=await Promise.all([
-    sb.from('hq_ledger_items').select('*').order('item_id'),
-    sb.from('hq_items').select('*').order('item_id'),
-    sb.from('hq_listing_snapshots').select('*').order('captured_at',{ascending:false}).limit(800),
-    sb.from('hq_review_queue').select('*').eq('state','OPEN').order('created_at',{ascending:false}),
-    sb.from('hq_ledger_events').select('item_id,event_type,occurred_on,amount,detail,source,created_at,external_key').order('created_at',{ascending:false}).limit(30),
-    sb.from('hq_vinted_relist_candidates').select('*').eq('state','PENDING').order('updated_at',{ascending:false}).limit(200)
-  ]);
-  if(snapshotsError||reviewsError||relistCandidatesError) throw (snapshotsError||reviewsError||relistCandidatesError);
-  if(ledgerError&&legacyError) throw ledgerError;
-  if(status)status.textContent='Dane podstawowe gotowe · dociągam diagnostykę…';
-  const [{data:gmailEvents,error:gmailError},{data:latestGmailBusinessEvents,error:latestGmailBusinessEventsError},{data:transactionExceptions,error:transactionExceptionsError},{data:qualityReport,error:qualityReportError},{data:collectorHealth,error:collectorHealthError},{data:emailSyncState,error:emailSyncError},{data:emailSyncRuns,error:emailSyncRunsError},{data:collectorRuns,error:collectorRunsError}]=await Promise.all([
-    sb.from('hq_external_events').select('source_event_id,event_type,state,occurred_at,item_title,amount,vinted_transaction_id,evidence,created_at').eq('source','GMAIL_VINTED').eq('state','NEEDS_REVIEW').order('created_at',{ascending:false}).limit(1000),
-    sb.from('hq_external_events').select('source_event_id,event_type,state,occurred_at,item_title,amount,vinted_transaction_id,matched_item_id,ledger_event_id,created_at').eq('source','GMAIL_VINTED').in('state',['AUTO_APPLIED','MANUAL_RESOLVED']).in('event_type',['SALE_PENDING','SALE_CONFIRMED','PURCHASE_CONFIRMED','PURCHASE_BUNDLE']).order('created_at',{ascending:false}).limit(1),
-    sb.from('hq_vinted_operations_exceptions').select('*').order('created_at',{ascending:false}).limit(1000),
-    sb.from('hq_vinted_daily_quality_reports').select('report_date,report,created_at').order('report_date',{ascending:false}).limit(1),
-    sb.from('hq_collector_control').select('*').eq('collector_key','vinted_live').maybeSingle(),
-    sb.from('hq_email_sync_state').select('*').eq('provider','gmail').maybeSingle(),
-    sb.from('hq_email_sync_runs').select('*').eq('provider','gmail').order('started_at',{ascending:false}).limit(1),
-    sb.from('hq_collector_runs').select('started_at,completed_at,detail,source,status').eq('collector_key','vinted_live').order('started_at',{ascending:false}).limit(1)
-  ]);
-  if(status)status.textContent='Dane HQ gotowe';
+function buildData({ledgerItems,legacyItems,snapshotCycles,reviews,events,eventsError,relistCandidates,relistCandidatesError,gmailEvents,gmailError,latestGmailBusinessEvents,latestGmailBusinessEventsError,transactionExceptions,transactionExceptionsError,qualityReport,qualityReportError,collectorHealth,collectorHealthError,emailSyncState,emailSyncError,emailSyncRuns,emailSyncRunsError,collectorRuns,collectorRunsError}){
   const source=(ledgerItems||[]).length?'ledger':(legacyItems||[]).length?'legacy':'empty';
   const items=source==='ledger'?(ledgerItems||[]):(legacyItems||[]).map(item=>({
     ...item,
@@ -87,7 +66,7 @@ async function loadData(){
   const pendingRelists=relistCandidates||[];
   const pendingByItem=new Map(pendingRelists.map(candidate=>[String(candidate.item_id),candidate]));
   const itemsWithPending=items.map(item=>({...item,relist_pending:pendingByItem.get(String(item.item_id))||null}));
-  const allSnapshots=snapshots||[];
+  const allSnapshots=snapshotCycles||[];
   const cloudSnapshots=allSnapshots.filter(snapshot=>['github_actions_vinted','supabase_edge_vinted'].includes(String(snapshot.source||'')));
   const cyclePool=cloudSnapshots.length?cloudSnapshots:allSnapshots;
   const cycleTimes=[...new Set(cyclePool.map(snapshot=>snapshot.captured_at).filter(Boolean))].sort().reverse();
@@ -111,7 +90,70 @@ async function loadData(){
   const live=[...liveById.values()].filter(snapshot=>linked.get(String(snapshot.vinted_item_id))?.ledger_status!=='SOLD');
   const missing=previousCapturedAt?itemsWithPending.filter(item=>item.ledger_status==='LISTED-BACKLOG'&&!item.storefront_hidden&&item.vinted_item_id&&!latestIds.has(String(item.vinted_item_id))&&!previousIds.has(String(item.vinted_item_id))):[];
   const pendingGmailReviews=gmailEvents||[];
-  return {items:itemsWithPending,snapshots:live,relistCandidates:pendingRelists,relistCandidatesError, reviews:reviews||[],events:events||[],eventsError,gmailEvents:pendingGmailReviews,gmailError,latestGmailBusinessEvent:(latestGmailBusinessEvents||[])[0]||null,latestGmailBusinessEventsError,transactionExceptions:transactionExceptions||[],transactionExceptionsError,qualityReport:(qualityReport||[])[0]||null,qualityReportError,collectorHealth:collectorHealth||null,collectorHealthError,emailSyncState:emailSyncState||null,emailSyncError,emailSyncRun:(emailSyncRuns||[])[0]||null,emailSyncRunsError,collectorRun:(collectorRuns||[])[0]||null,pendingGmailReviews,source,linked,missing,latestCapturedAt,previousCapturedAt,pendingConfirmation};
+  return {ledgerItems:ledgerItems||[],legacyItems:legacyItems||[],cycleSnapshots:allSnapshots,items:itemsWithPending,snapshots:live,relistCandidates:pendingRelists,relistCandidatesError,reviews:reviews||[],events:events||[],eventsError,gmailEvents:pendingGmailReviews,gmailError,latestGmailBusinessEvent:(latestGmailBusinessEvents||[])[0]||null,latestGmailBusinessEventsError,transactionExceptions:transactionExceptions||[],transactionExceptionsError,qualityReport:(qualityReport||[])[0]||null,qualityReportError,collectorHealth:collectorHealth||null,collectorHealthError,emailSyncState:emailSyncState||null,emailSyncError,emailSyncRun:(emailSyncRuns||[])[0]||null,emailSyncRunsError,collectorRun:(collectorRuns||[])[0]||null,collectorRunsError,pendingGmailReviews,source,linked,missing,latestCapturedAt,previousCapturedAt,pendingConfirmation};
+}
+
+async function loadData(){
+  const status=$('status');if(status)status.textContent='Wczytuję podstawowe dane HQ…';
+  const [{data:ledgerItems,error:ledgerError},{data:legacyItems,error:legacyError},snapshotCycles,{data:reviews,error:reviewsError},{data:events,error:eventsError},{data:relistCandidates,error:relistCandidatesError}]=await Promise.all([
+    sb.from('hq_ledger_items').select('*').order('item_id'),
+    sb.from('hq_items').select('*').order('item_id'),
+    loadSnapshotCycles(),
+    sb.from('hq_review_queue').select('*').eq('state','OPEN').order('created_at',{ascending:false}),
+    sb.from('hq_ledger_events').select('item_id,event_type,occurred_on,amount,detail,source,created_at,external_key').order('created_at',{ascending:false}).limit(30),
+    sb.from('hq_vinted_relist_candidates').select('*').eq('state','PENDING').order('updated_at',{ascending:false}).limit(200)
+  ]);
+  if(reviewsError||relistCandidatesError) throw (reviewsError||relistCandidatesError);
+  if(ledgerError&&legacyError) throw ledgerError;
+  if(status)status.textContent='Dane podstawowe gotowe · dociągam diagnostykę…';
+  const [{data:gmailEvents,error:gmailError},{data:latestGmailBusinessEvents,error:latestGmailBusinessEventsError},{data:transactionExceptions,error:transactionExceptionsError},{data:qualityReport,error:qualityReportError},{data:collectorHealth,error:collectorHealthError},{data:emailSyncState,error:emailSyncError},{data:emailSyncRuns,error:emailSyncRunsError},{data:collectorRuns,error:collectorRunsError}]=await Promise.all([
+    sb.from('hq_external_events').select('source_event_id,event_type,state,occurred_at,item_title,amount,vinted_transaction_id,evidence,created_at').eq('source','GMAIL_VINTED').eq('state','NEEDS_REVIEW').order('created_at',{ascending:false}).limit(1000),
+    sb.from('hq_external_events').select('source_event_id,event_type,state,occurred_at,item_title,amount,vinted_transaction_id,matched_item_id,ledger_event_id,created_at').eq('source','GMAIL_VINTED').in('state',['AUTO_APPLIED','MANUAL_RESOLVED']).in('event_type',['SALE_PENDING','SALE_CONFIRMED','PURCHASE_CONFIRMED','PURCHASE_BUNDLE']).order('created_at',{ascending:false}).limit(1),
+    sb.from('hq_vinted_operations_exceptions').select('*').order('created_at',{ascending:false}).limit(1000),
+    sb.from('hq_vinted_daily_quality_reports').select('report_date,report,created_at').order('report_date',{ascending:false}).limit(1),
+    sb.from('hq_collector_control').select('*').eq('collector_key','vinted_live').maybeSingle(),
+    sb.from('hq_email_sync_state').select('*').eq('provider','gmail').maybeSingle(),
+    sb.from('hq_email_sync_runs').select('*').eq('provider','gmail').order('started_at',{ascending:false}).limit(1),
+    sb.from('hq_collector_runs').select('started_at,completed_at,detail,source,status').eq('collector_key','vinted_live').order('started_at',{ascending:false}).limit(1)
+  ]);
+  if(status)status.textContent='Dane HQ gotowe';
+  return buildData({ledgerItems,legacyItems,snapshotCycles,reviews,events,eventsError,relistCandidates,relistCandidatesError,gmailEvents,gmailError,latestGmailBusinessEvents,latestGmailBusinessEventsError,transactionExceptions,transactionExceptionsError,qualityReport,qualityReportError,collectorHealth,collectorHealthError,emailSyncState,emailSyncError,emailSyncRuns,emailSyncRunsError,collectorRuns,collectorRunsError});
+}
+
+async function refreshSnapshotData(cached){
+  const [snapshotCycles,{data:collectorHealth,error:collectorHealthError},{data:collectorRuns,error:collectorRunsError}]=await Promise.all([
+    loadSnapshotCycles(),
+    sb.from('hq_collector_control').select('*').eq('collector_key','vinted_live').maybeSingle(),
+    sb.from('hq_collector_runs').select('started_at,completed_at,detail,source,status').eq('collector_key','vinted_live').order('started_at',{ascending:false}).limit(1)
+  ]);
+  return buildData({...cached,snapshotCycles,collectorHealth,collectorHealthError,collectorRuns,collectorRunsError});
+}
+
+async function refreshChangedData(cached,entities){
+  // The delta feed is deliberately grouped by source collection.  A listing
+  // collector run therefore replaces only the two current listing cycles;
+  // a ledger edit replaces only the small ledger collection, not all HQ data.
+  const next={...cached};
+  const tasks=[];
+  if(entities.has('hq_listing_snapshots'))tasks.push(Promise.all([
+    loadSnapshotCycles(),
+    sb.from('hq_collector_control').select('*').eq('collector_key','vinted_live').maybeSingle(),
+    sb.from('hq_collector_runs').select('started_at,completed_at,detail,source,status').eq('collector_key','vinted_live').order('started_at',{ascending:false}).limit(1)
+  ]).then(([snapshotCycles,collectorHealth,collectorRuns])=>Object.assign(next,{snapshotCycles,collectorHealth:collectorHealth.data,collectorHealthError:collectorHealth.error,collectorRuns:collectorRuns.data,collectorRunsError:collectorRuns.error})));
+  if(entities.has('hq_ledger_items'))tasks.push(Promise.all([
+    sb.from('hq_ledger_items').select('*').order('item_id'),
+    sb.from('hq_items').select('*').order('item_id'),
+    sb.from('hq_vinted_relist_candidates').select('*').eq('state','PENDING').order('updated_at',{ascending:false}).limit(200)
+  ]).then(([ledger,legacy,relistCandidates])=>Object.assign(next,{ledgerItems:ledger.data,legacyItems:legacy.data,relistCandidates:relistCandidates.data,relistCandidatesError:relistCandidates.error})));
+  if(entities.has('hq_review_queue'))tasks.push(sb.from('hq_review_queue').select('*').eq('state','OPEN').order('created_at',{ascending:false}).then(result=>Object.assign(next,{reviews:result.data})));
+  if(entities.has('hq_ledger_events'))tasks.push(sb.from('hq_ledger_events').select('item_id,event_type,occurred_on,amount,detail,source,created_at,external_key').order('created_at',{ascending:false}).limit(30).then(result=>Object.assign(next,{events:result.data,eventsError:result.error})));
+  if(entities.has('hq_external_events'))tasks.push(Promise.all([
+    sb.from('hq_external_events').select('source_event_id,event_type,state,occurred_at,item_title,amount,vinted_transaction_id,evidence,created_at').eq('source','GMAIL_VINTED').eq('state','NEEDS_REVIEW').order('created_at',{ascending:false}).limit(1000),
+    sb.from('hq_external_events').select('source_event_id,event_type,state,occurred_at,item_title,amount,vinted_transaction_id,matched_item_id,ledger_event_id,created_at').eq('source','GMAIL_VINTED').in('state',['AUTO_APPLIED','MANUAL_RESOLVED']).in('event_type',['SALE_PENDING','SALE_CONFIRMED','PURCHASE_CONFIRMED','PURCHASE_BUNDLE']).order('created_at',{ascending:false}).limit(1),
+    sb.from('hq_vinted_operations_exceptions').select('*').order('created_at',{ascending:false}).limit(1000)
+  ]).then(([gmailEvents,latestGmailBusinessEvents,transactionExceptions])=>Object.assign(next,{gmailEvents:gmailEvents.data,gmailError:gmailEvents.error,latestGmailBusinessEvents:latestGmailBusinessEvents.data,latestGmailBusinessEventsError:latestGmailBusinessEvents.error,transactionExceptions:transactionExceptions.data,transactionExceptionsError:transactionExceptions.error})));
+  await Promise.all(tasks);
+  return buildData(next);
 }
 
 export async function data(){
@@ -119,7 +161,9 @@ export async function data(){
   if(cached?.data){
     const changes=await changesSince(cached.cursor).catch(()=>null);
     if(changes?.length){
-      const next=await loadData();
+      const entities=changedEntities(changes);
+      const incremental=['hq_listing_snapshots','hq_ledger_items','hq_review_queue','hq_ledger_events','hq_external_events'];
+      const next=[...entities].every(entity=>incremental.includes(entity))?await refreshChangedData(unpack(cached.data),entities):await loadData();
       await cachePut({data:pack(next),cursor:latestCursor(changes)||cached.cursor||0,savedAt:Date.now()});
       return next;
     }

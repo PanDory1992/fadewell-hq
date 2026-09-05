@@ -14,6 +14,6 @@ assert.doesNotMatch(migration, /apply_hq_ledger_action|insert into hq_ledger_eve
 assert.match(operations, /row\.item_title/);
 assert.match(operations, /mail\.google\.com\/mail\/u\/0\/\#all/);
 assert.match(operations, /hq\.js\?v=20260820-hidden-missing/);
-assert.match(hq, /fadewell-hq-data-v5/);
+assert.match(hq, /fadewell-hq-data-v6/);
 
 console.log('sale exception reconciliation checks passed');
