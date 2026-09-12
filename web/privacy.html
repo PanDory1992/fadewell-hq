@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Privacy policy · FADEWELL HQ</title>
+<link rel="stylesheet" href="hq.css">
+<main style="max-width:900px">
+  <header class="top">
+    <div>
+      <div class="eyebrow">FADEWELL HQ</div>
+      <h1>Privacy policy</h1>
+      <p class="muted">Effective 13 September 2026</p>
+    </div>
+    <span class="badge">Google OAuth</span>
+  </header>
+
+  <section class="stack">
+    <article class="card">
+      <h2>Scope and operator</h2>
+      <p>This policy covers the Gmail integration used by FADEWELL HQ, a private operations tool for the FADEWELL vintage-denim business. The integration is operated by the owner of FADEWELL. Contact: <a href="mailto:mikita.matej35@gmail.com">mikita.matej35@gmail.com</a>.</p>
+    </article>
+
+    <article class="card">
+      <h2>Google data accessed</h2>
+      <p>After explicit consent, the integration uses the Gmail API scope <code>https://www.googleapis.com/auth/gmail.modify</code>. It accesses Gmail history and message metadata to detect new mail, then processes messages identified as coming from Vinted. For relevant Vinted messages it may access the sender, subject, timestamps, message and thread identifiers, message body, and transaction details such as item title, amount and transaction identifier.</p>
+      <p>The Gmail history feed may cause the service to retrieve metadata for new messages to determine their sender. Non-Vinted message content is not parsed into business data or stored as HQ evidence.</p>
+    </article>
+
+    <article class="card">
+      <h2>How data is used</h2>
+      <p>Vinted message data is used only to record purchase and sale evidence, prepare or apply narrowly guarded ledger actions, reconcile transactions, identify cases requiring human review, and audit the result. The integration may move a Vinted “Confirmation needed” message to Trash after recording that action. It does not send messages, build advertising profiles, or use Google data for advertising.</p>
+    </article>
+
+    <article class="card">
+      <h2>Storage, sharing and security</h2>
+      <p>The OAuth refresh token is stored in server-side protected storage. Relevant evidence may include message identifiers, sender, subject, timestamps, redacted normalized text, a content hash, extracted transaction fields and audit results. Data is transmitted over encrypted connections and access to the operational system is restricted to its owner.</p>
+      <p>Google user data is not sold. It is not shared with advertisers or data brokers. Supabase is used as the infrastructure provider for protected storage and processing. Data is retained only while needed for the operational record, audit, security and applicable record-keeping obligations.</p>
+    </article>
+
+    <article class="card">
+      <h2>Your choices</h2>
+      <p>The mailbox owner can revoke access at any time from Google Account permissions. To request deletion of stored Gmail-derived data or ask a privacy question, contact <a href="mailto:mikita.matej35@gmail.com">mikita.matej35@gmail.com</a>. Revoking access stops future Gmail synchronization but does not automatically remove records that must be retained for legitimate audit or legal purposes.</p>
+    </article>
+
+    <article class="card">
+      <h2>Google API Limited Use</h2>
+      <p>Use of information received from Google Workspace APIs follows the <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including its Limited Use requirements.</p>
+    </article>
+
+    <p class="muted small"><a class="text-link" href="oauth.html">About the Gmail integration</a> · <a href="terms.html">Terms of use</a></p>
+  </section>
+</main>
+</html>
