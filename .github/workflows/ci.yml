@@ -33,6 +33,7 @@ jobs:
           node scripts/test_gmail_ingest_contract.mjs
           node scripts/test_hq_security_boundary.mjs
           node scripts/test_superseded_sale_transaction_visibility.mjs
+          node scripts/test_historical_completion_reconciliation.mjs
           python -m unittest cloud.test_gmail_sync_watchdog
       - name: Check relist pending state machine
         run: node scripts/test_relist_contract.mjs
