@@ -83,10 +83,10 @@ Deno.serve(async request => {
   if (request.method !== 'POST') return reply({ error: 'Method not allowed.' }, 405);
   const authorization = request.headers.get('authorization') || '';
   if (!/^Bearer\s+\S+$/i.test(authorization)) return reply({ error: 'Unauthorized.' }, 401);
-  const identityResponse = await fetch('https://openidconnect.googleapis.com/v1/userinfo', { headers: { authorization } });
+  const identityResponse = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/profile', { headers: { authorization } });
   if (!identityResponse.ok) return reply({ error: 'Google identity verification failed.' }, 401);
   const identity = await identityResponse.json();
-  if (identity.email !== 'falka.falka35@gmail.com' || identity.email_verified !== true) return reply({ error: 'Unauthorized Gmail account.' }, 403);
+  if (identity.emailAddress !== 'falka.falka35@gmail.com') return reply({ error: 'Unauthorized Gmail account.' }, 403);
 
   const startedAt = new Date().toISOString();
   let runId: string | null = null;
