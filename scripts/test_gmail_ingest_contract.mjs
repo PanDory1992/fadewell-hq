@@ -28,4 +28,10 @@ const manifestJson = JSON.parse(manifest);
 assert.ok(manifestJson.oauthScopes.includes('openid'), 'the manifest must request an OpenID identity token');
 assert.ok(manifestJson.oauthScopes.includes('https://www.googleapis.com/auth/userinfo.email'), 'the identity token must include the verified mailbox email');
 
+const systemPage = await readFile(new URL('../web/system.html', import.meta.url), 'utf8');
+assert.match(systemPage, /Automatyczny odczyt Apps Script działa co 5 minut/, 'HQ System must describe the active Apps Script transport');
+assert.doesNotMatch(systemPage, /hq-gmail-oauth\/authorize/, 'HQ System must not offer the retired OAuth connection');
+assert.doesNotMatch(systemPage, /functions\/v1\/hq-gmail-sync/, 'HQ System must not invoke the retired OAuth poller');
+assert.doesNotMatch(systemPage, /Połącz Gmail/, 'HQ System must not tell the owner to reconnect the retired integration');
+
 console.log('Gmail ingest boundary contract checks passed');
