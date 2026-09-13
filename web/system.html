@@ -72,7 +72,8 @@
       date,
       dateTime,
       money,
-    } from "./hq.js?v=20260809-live-title";
+      sb,
+    } from "./hq.js?v=20260913-apps-script";
     const gmailBadge = $("gmail-badge"),
       gmailHealth = $("gmail-health");
     const age = (value) =>
@@ -141,8 +142,29 @@
     if (await shell("system.html")) {
       app.hidden = false;
       try {
-        const d = await data(),
-          latest = d.snapshots[0]?.captured_at,
+        const [
+          d,
+          { data: freshEmailSyncState, error: freshEmailSyncError },
+          { data: freshEmailSyncRuns, error: freshEmailSyncRunsError },
+        ] = await Promise.all([
+          data(),
+          sb
+            .from("hq_email_sync_state")
+            .select("*")
+            .eq("provider", "gmail")
+            .maybeSingle(),
+          sb
+            .from("hq_email_sync_runs")
+            .select("*")
+            .eq("provider", "gmail")
+            .order("started_at", { ascending: false })
+            .limit(1),
+        ]);
+        d.emailSyncState = freshEmailSyncState;
+        d.emailSyncError = freshEmailSyncError;
+        d.emailSyncRun = (freshEmailSyncRuns || [])[0] || null;
+        d.emailSyncRunsError = freshEmailSyncRunsError;
+        const latest = d.snapshots[0]?.captured_at,
           minutes = age(latest),
           open = d.reviews.length + d.pendingGmailReviews.length,
           missing = d.items.filter(
