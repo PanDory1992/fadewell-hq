@@ -3,7 +3,9 @@ import { readFile } from 'node:fs/promises';
 
 const source = await readFile(new URL('../supabase/functions/hq-gmail-ingest/index.ts', import.meta.url), 'utf8');
 
-assert.match(source, /gmail\.googleapis\.com\/gmail\/v1\/users\/me\/profile/, 'the intake must validate the Google access token against the Gmail profile');
+assert.match(source, /createRemoteJWKSet/, 'the intake must verify the Google identity token signature');
+assert.match(source, /jwtVerify/, 'the intake must validate Google identity-token claims');
+assert.match(source, /accounts\.google\.com/, 'the intake must restrict the token issuer to Google');
 assert.match(source, /falka\.falka35@gmail\.com/, 'the intake must accept only the owner mailbox');
 assert.match(source, /authorization/i, 'the intake must authenticate the Apps Script request');
 assert.match(source, /isTrustedVintedSender/, 'the server must enforce the Vinted sender boundary');
@@ -19,6 +21,11 @@ assert.match(appsScript, /everyMinutes\(5\)/, 'the intake trigger must run every
 assert.match(appsScript, /LockService/, 'overlapping trigger executions must be prevented');
 assert.match(appsScript, /from:no-reply@vinted\.pl/, 'the Gmail query must stay sender-scoped');
 assert.match(appsScript, /HQ_INTAKE_CURSOR_MS/, 'the script must keep a replay-safe cursor');
-assert.match(appsScript, /ScriptApp\.getOAuthToken\(\)/, 'the script must use a short-lived Google token');
+assert.match(appsScript, /ScriptApp\.getIdentityToken\(\)/, 'the script must use a short-lived Google identity token');
+
+const manifest = await readFile(new URL('../apps-script/gmail-intake/appsscript.json', import.meta.url), 'utf8');
+const manifestJson = JSON.parse(manifest);
+assert.ok(manifestJson.oauthScopes.includes('openid'), 'the manifest must request an OpenID identity token');
+assert.ok(manifestJson.oauthScopes.includes('https://www.googleapis.com/auth/userinfo.email'), 'the identity token must include the verified mailbox email');
 
 console.log('Gmail ingest boundary contract checks passed');

@@ -33,7 +33,7 @@ const run = ({ messages = [makeMessage({ id: 'abc123' })], responseCode = 200 } 
       fetches.push({ url, options });
       return { getResponseCode: () => responseCode, getContentText: () => responseCode === 200 ? '{"ok":true}' : '{"error":"failed"}' };
     } },
-    ScriptApp: { getOAuthToken: () => 'short-lived-google-token', getProjectTriggers: () => [], newTrigger: () => ({ timeBased: () => ({ everyMinutes: () => ({ create: () => {} }) }) }) },
+    ScriptApp: { getIdentityToken: () => 'short-lived-google-identity-token', getProjectTriggers: () => [], newTrigger: () => ({ timeBased: () => ({ everyMinutes: () => ({ create: () => {} }) }) }) },
     Utilities: { sleep: () => {} },
   };
   vm.createContext(context);
@@ -46,7 +46,7 @@ const run = ({ messages = [makeMessage({ id: 'abc123' })], responseCode = 200 } 
   const result = context.syncVintedMail();
   assert.equal(fetches.length, 1);
   assert.equal(fetches[0].url, 'https://qgjkxtolyhbwpvncwtkn.supabase.co/functions/v1/hq-gmail-ingest');
-  assert.equal(fetches[0].options.headers.Authorization, 'Bearer short-lived-google-token');
+  assert.equal(fetches[0].options.headers.Authorization, 'Bearer short-lived-google-identity-token');
   const payload = JSON.parse(fetches[0].options.payload);
   assert.equal(payload.source, 'fadewell_apps_script_v1');
   assert.equal(payload.messages[0].gmail_message_id, 'abc123');

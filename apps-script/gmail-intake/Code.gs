@@ -42,10 +42,14 @@ function readCandidateMessages_(cutoffMs) {
 }
 
 function sendBatch_(messages, observedAt) {
+  var identityToken = ScriptApp.getIdentityToken();
+  if (!identityToken) {
+    throw new Error('Google identity token is unavailable. Save appsscript.json and approve the requested permissions again.');
+  }
   var response = UrlFetchApp.fetch(HQ_GMAIL_CONFIG.endpoint, {
     method: 'post',
     contentType: 'application/json',
-    headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
+    headers: { Authorization: 'Bearer ' + identityToken },
     muteHttpExceptions: true,
     payload: JSON.stringify({
       source: HQ_GMAIL_CONFIG.source,

@@ -1,4 +1,5 @@
 import { VINTED_PARSER_VERSION, nonEmptyLines, parseVintedMail } from '../hq-gmail-sync/vinted-parser.mjs';
+import { createRemoteJWKSet, jwtVerify } from 'npm:jose@5.9.6';
 
 const url = Deno.env.get('SUPABASE_URL')!;
 const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -8,6 +9,8 @@ const reply = (body: unknown, status = 200) => new Response(JSON.stringify(body)
 const REDACTION_VERSION = 'v1';
 const MAX_MESSAGES = 50;
 const MAX_BODY_LENGTH = 750_000;
+const GOOGLE_JWKS = createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2/v3/certs'));
+const TRUSTED_GOOGLE_ISSUERS = ['https://accounts.google.com', 'accounts.google.com'];
 
 type IncomingMessage = {
   gmail_message_id: string;
@@ -19,6 +22,13 @@ type IncomingMessage = {
 };
 
 const isTrustedVintedSender = (value: string) => /(?:^|<)no-reply@vinted\.pl>?\s*$/i.test(String(value || '').trim());
+const verifyGoogleIdentity = async (authorization: string) => {
+  const token = authorization.replace(/^Bearer\s+/i, '');
+  const { payload } = await jwtVerify(token, GOOGLE_JWKS, { issuer: TRUSTED_GOOGLE_ISSUERS });
+  if (payload.email !== 'falka.falka35@gmail.com' || payload.email_verified !== true) {
+    throw new Error('Unauthorized Google account.');
+  }
+};
 const norm = (value: string | null | undefined) => (value || '').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, ' ').trim();
 const safeNormalizedText = (body: string) => {
   const all = nonEmptyLines(body.replace(/https?:\/\/\S+/gi, '[link redacted]'));
@@ -83,10 +93,12 @@ Deno.serve(async request => {
   if (request.method !== 'POST') return reply({ error: 'Method not allowed.' }, 405);
   const authorization = request.headers.get('authorization') || '';
   if (!/^Bearer\s+\S+$/i.test(authorization)) return reply({ error: 'Unauthorized.' }, 401);
-  const identityResponse = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/profile', { headers: { authorization } });
-  if (!identityResponse.ok) return reply({ error: 'Google identity verification failed.' }, 401);
-  const identity = await identityResponse.json();
-  if (identity.emailAddress !== 'falka.falka35@gmail.com') return reply({ error: 'Unauthorized Gmail account.' }, 403);
+  try {
+    await verifyGoogleIdentity(authorization);
+  } catch (error) {
+    console.error('Google identity verification failed', String(error instanceof Error ? error.message : error));
+    return reply({ error: 'Google identity verification failed.' }, 401);
+  }
 
   const startedAt = new Date().toISOString();
   let runId: string | null = null;
