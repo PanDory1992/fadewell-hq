@@ -18,6 +18,9 @@ declare
   previous_snapshot jsonb;
   event_id bigint;
 begin
+  if auth.role() <> 'service_role' and not public.is_hq_owner() then
+    raise exception 'HQ owner access required';
+  end if;
   if target_item is null then
     raise exception 'Void purchase requires an item_id';
   end if;
@@ -74,3 +77,6 @@ begin
   return jsonb_build_object('success', true, 'item_id', target_item, 'event_id', event_id, 'previous_state', previous_snapshot);
 end;
 $$;
+
+revoke all on function public.apply_hq_void_purchase(jsonb, text) from public, anon, authenticated;
+grant execute on function public.apply_hq_void_purchase(jsonb, text) to authenticated, service_role;

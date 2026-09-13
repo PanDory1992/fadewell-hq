@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 
 const operations=readFileSync(new URL('../web/operations.html',import.meta.url),'utf8');
-const migration=readFileSync(new URL('../supabase/migrations/065_relist_pending_state_machine.sql',import.meta.url),'utf8');
-const correction=readFileSync(new URL('../supabase/migrations/20260820143000_correct_relist_identity_and_title_provenance.sql',import.meta.url),'utf8');
+const migration=readFileSync(new URL('../supabase/migrations/20260808183858_relist_pending_state_machine_20260808.sql',import.meta.url),'utf8');
+const correction=readFileSync(new URL('../supabase/migrations/20260820143626_correct_relist_identity_and_title_provenance_20260820.sql',import.meta.url),'utf8');
 const edge=readFileSync(new URL('../supabase/functions/hq-vinted-collector/index.ts',import.meta.url),'utf8');
 const sharedResolver=readFileSync(new URL('../supabase/functions/_shared/vinted-resolver.ts',import.meta.url),'utf8');
 const hq=readFileSync(new URL('../web/hq.js',import.meta.url),'utf8');

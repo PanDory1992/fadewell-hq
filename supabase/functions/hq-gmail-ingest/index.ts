@@ -1,4 +1,4 @@
-import { VINTED_PARSER_VERSION, nonEmptyLines, parseVintedMail } from '../hq-gmail-sync/vinted-parser.mjs';
+import { VINTED_PARSER_VERSION, nonEmptyLines, parseVintedMail } from '../_shared/vinted-gmail-parser.mjs';
 import { createRemoteJWKSet, jwtVerify } from 'npm:jose@5.9.6';
 
 const url = Deno.env.get('SUPABASE_URL')!;

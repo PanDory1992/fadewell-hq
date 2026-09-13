@@ -19,9 +19,9 @@ assert.equal(sizeBand(29),'W<=29');assert.equal(sizeBand(30),'W30-32');assert.eq
 const segments=buildSourcing(items,cells,new Date('2026-08-11T12:00:00Z'),120),levis=segments.find(row=>row.f.model==='501'&&row.f.band==='W33-35'),lee=segments.find(row=>row.f.model==='101'),small=segments.find(row=>row.f.band==='W<=29');
 assert.equal(levis.action,'OPEN_REPLACEMENT');assert.equal(levis.soldRecent.length,3);assert.equal(levis.listed.length,1);assert.equal(levis.unlisted.length,1);assert.equal(levis.unlistedCapital,35);assert.equal(levis.medianSale,160);assert.equal(levis.medianProfit,110);assert.equal(levis.policy.max_landed_cost,50);
 assert.equal(lee.action,'CLOSED');assert.equal(small.action,'CLOSED');assert.equal(policyFor(levis.f,cells).cell_id,'green');
-const migration=readFileSync(new URL('../supabase/migrations/20260811143000_sourcing_capacity_gate.sql',import.meta.url),'utf8');
+const migration=readFileSync(new URL('../supabase/migrations/20260811135653_sourcing_capacity_gate.sql',import.meta.url),'utf8');
 assert.match(migration,/hq_sourcing_gate_current/);assert.match(migration,/ONE_CONFIRMED_SALE_ONE_REPLACEMENT/);assert.match(migration,/hq_sourcing_replacement_queue_current/);assert.match(migration,/hq_capture_sourcing_replacement_release/);for(const den of ['202','264','225','223','285'])assert.match(migration,new RegExp(`DEN-${den}`));
-const encodingRepair=readFileSync(new URL('../supabase/migrations/20260811180000_sourcing_utf8_data_repair.sql',import.meta.url),'utf8');
+const encodingRepair=readFileSync(new URL('../supabase/migrations/20260811170116_sourcing_utf8_data_repair_20260811.sql',import.meta.url),'utf8');
 assert.doesNotMatch(encodingRepair,/[^\x00-\x7f]/,'Sourcing repair migration must stay ASCII-only in transport');
 assert.match(encodingRepair,/convert_from\(decode\(/);assert.match(encodingRepair,/hq_sourcing_gate_current/);assert.match(encodingRepair,/Sourcing UTF-8 repair incomplete/);
 for(const id of ['G-501-33-35','G-505-30-32','G-505-33-35','G-WRANGLER-30-32','G-WRANGLER-33-35','G-550-30-32','G-550-33-35','G-615-30-32','G-615-33-35','R-SMALL-WAIST','R-LEE-GENERIC','R-ORDINARY-219','R-OFF-NICHE','DEN-202','DEN-264','DEN-225','DEN-223','DEN-285'])assert.match(encodingRepair,new RegExp(id));

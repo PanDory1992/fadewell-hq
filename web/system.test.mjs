@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 const system=readFileSync(new URL('./system.html',import.meta.url),'utf8');
 const operations=readFileSync(new URL('./operations.html',import.meta.url),'utf8');
 const hq=readFileSync(new URL('./hq.js',import.meta.url),'utf8');
-const relistMigration=readFileSync(new URL('../supabase/migrations/065_relist_pending_state_machine.sql',import.meta.url),'utf8');
+const relistMigration=readFileSync(new URL('../supabase/migrations/20260808183858_relist_pending_state_machine_20260808.sql',import.meta.url),'utf8');
 const cacheMigration=readFileSync(new URL('../supabase/migrations/20260905110000_incremental_browser_snapshot_cache.sql',import.meta.url),'utf8');
 assert.match(system,/Poczta Vinted/);
 assert.match(system,/Ostatnia udana synchronizacja:/);

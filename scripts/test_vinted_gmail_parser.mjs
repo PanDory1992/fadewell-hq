@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { parseVintedMail } from '../supabase/functions/hq-gmail-sync/vinted-parser.mjs';
+import { parseVintedMail } from '../supabase/functions/_shared/vinted-gmail-parser.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const fixtureRoot = resolve(root, 'data/private_gmail_fixtures');

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { parseVintedMail } from '../supabase/functions/hq-gmail-sync/vinted-parser.mjs';
+import { parseVintedMail } from '../supabase/functions/_shared/vinted-gmail-parser.mjs';
 
 for (const message of [
   { subject: 'Confirmation needed', body: '' },
