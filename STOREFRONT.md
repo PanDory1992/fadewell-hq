@@ -6,8 +6,9 @@ evidence, owner data, or other accounting fields.
 
 ## Data flow
 
-1. `.github/workflows/storefront-sync.yml` runs every 15 minutes and can also be started
-   manually. After a successful sync it dispatches `storefront-updated` to the
+1. Supabase cron dispatches `.github/workflows/storefront-sync.yml` every 15
+   minutes through the authenticated `hq-github-scheduler` Edge Function. The
+   workflow can also be started manually. After a successful sync it dispatches `storefront-updated` to the
    public site repository, which starts a build immediately. The site's hourly
    schedule remains as a fallback.
 2. `cloud/storefront_live_sync.py` reads the live wardrobe once, immediately

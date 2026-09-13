@@ -237,7 +237,8 @@ file-scoped whitespace/diff validation through an approved tool
 
 #### Gmail parser regression gate
 
-Before deploying a change to `supabase/functions/hq-gmail-sync`, run the
+Before deploying a change to the shared Gmail parser used by
+`supabase/functions/hq-gmail-ingest`, run the
 private fixture gate:
 
 ```powershell

@@ -22,7 +22,7 @@ Live Wardrobe ma otrzymywać kompletny snapshot co godzinę bez ręcznego pilnow
 - kopia źródłowa zegara: `cloud/vinted_watchdog_apps_script.js`
 - bramka watchdog: `supabase/functions/hq-vinted-watchdog/index.ts`
 - wspólny resolver: `supabase/functions/_shared/vinted-resolver.ts`
-- control plane: migracje `038_self_healing_vinted_collector.sql`, `039_external_vinted_watchdog.sql` i `050_hourly_vinted_collector_circuit_breaker.sql`
+- control plane: migracje `038_self_healing_vinted_collector.sql`, `039_external_vinted_watchdog.sql` i `20260723180234_hourly_vinted_collector_circuit_breaker.sql`
 - fallback/manual executor: `.github/workflows/vinted-cloud-sync.yml` i `cloud/vinted_snapshot_sync.py`
 - stan dla użytkownika: `web/operations.html` i `web/hq.js`
 
