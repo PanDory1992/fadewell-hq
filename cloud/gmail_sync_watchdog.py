@@ -1,5 +1,4 @@
 import os
-import time
 from datetime import datetime, timezone
 
 MAX_AGE_MINUTES = 12
@@ -31,28 +30,10 @@ def main():
     if not is_stale(before):
         print(f"Gmail sync is fresh: {before}")
         return
-
-    sync_url = f"{base}/functions/v1/hq-gmail-sync"
-    last_error = None
-    for attempt in range(1, 4):
-        try:
-            run = requests.post(sync_url, headers=headers, json={"source": "GITHUB_WATCHDOG"}, timeout=90)
-            if run.status_code not in (200, 202):
-                raise RuntimeError(f"HTTP {run.status_code}: {run.text[:500]}")
-            time.sleep(3)
-            check = requests.get(state_url, headers=headers, timeout=20)
-            check.raise_for_status()
-            current_rows = check.json()
-            after = current_rows[0].get("last_success_at") if current_rows else None
-            if after and after != before and not is_stale(after):
-                print(f"Gmail watchdog recovered the sync: {after}")
-                return
-            last_error = f"sync returned {run.status_code}, but freshness did not advance"
-        except Exception as error:
-            last_error = str(error)
-        if attempt < 3:
-            time.sleep(attempt * 15)
-    raise RuntimeError(f"Gmail remained stale after three recovery attempts: {last_error}")
+    raise RuntimeError(
+        "Apps Script Gmail intake is stale. Check the FADEWELL HQ Gmail Intake "
+        "project execution history; the retired OAuth poller will not be restarted."
+    )
 
 
 if __name__ == "__main__":

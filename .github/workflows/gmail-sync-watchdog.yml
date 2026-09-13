@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  recover-if-stale:
+  verify-freshness:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
@@ -22,7 +22,7 @@ jobs:
         with:
           python-version: '3.11'
       - run: pip install --disable-pip-version-check requests
-      - name: Recover only when the five-minute Gmail sync is stale
+      - name: Alert when the five-minute Apps Script intake is stale
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
