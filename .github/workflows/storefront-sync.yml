@@ -36,10 +36,14 @@ jobs:
           done
       - name: Suppress a transient failure while the last good projection is fresh
         if: steps.refresh.outcome == 'failure'
+        continue-on-error: true
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: python cloud/storefront_health_check.py --max-age-minutes 75
+      - name: Keep persistent failure visible without notification spam
+        if: steps.refresh.outcome == 'failure'
+        run: echo "::warning title=Storefront collector stale::The failed refresh is recorded in HQ health; repeated dispatches stay non-paging."
       - name: Rebuild the static Storefront immediately
         if: steps.refresh.outcome == 'success'
         continue-on-error: true

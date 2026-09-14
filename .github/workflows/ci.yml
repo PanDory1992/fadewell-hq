@@ -43,4 +43,6 @@ jobs:
       - name: Check experiment engine contract
         run: node scripts/test_experiment_engine.mjs
       - name: Check sourcing capacity gate and UTF-8 repair
-        run: node web/sourcing.test.mjs
+        run: |
+          node web/sourcing.test.mjs
+          node scripts/test_workflow_alert_policy.mjs
