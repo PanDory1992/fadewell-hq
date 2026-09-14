@@ -271,14 +271,14 @@ def fetch_user_catalog(session, user_id):
     while page <= total_pages:
         response = get_with_retry(
             session,
-            "https://www.vinted.pl/api/v2/catalog/items",
-            params={"user_ids[]": int(user_id), "page": page, "per_page": 96, "order": "newest_first"},
+            f"https://www.vinted.pl/api/v2/wardrobe/{int(user_id)}/items",
+            params={"page": page, "per_page": 96, "order": "newest_first"},
             headers=VINTED_HEADERS,
             timeout=30,
         )
         payload = response.json()
         batch = payload.get("items") or []
-        if any(int((item.get("user") or {}).get("id") or 0) != int(user_id) for item in batch):
+        if any(int(item.get("user_id") or (item.get("user") or {}).get("id") or 0) != int(user_id) for item in batch):
             raise RuntimeError("Refusing mixed-seller Vinted response")
         pagination = payload.get("pagination") or {}
         total_pages = int(pagination.get("total_pages") or page)

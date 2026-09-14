@@ -38,11 +38,11 @@ def condition_label(item):
     return value or None
 
 def _fetch_catalog_pass(session):
-    endpoint = "https://www.vinted.pl/api/v2/catalog/items"; page = 1; anchor = time.time(); total_pages = 1; total_entries = None; items = []
+    endpoint = f"https://www.vinted.pl/api/v2/wardrobe/{USER_ID}/items"; page = 1; anchor = time.time(); total_pages = 1; total_entries = None; items = []
     while page <= total_pages:
-        response = session.get(endpoint, params={"user_ids[]": USER_ID, "page": page, "per_page": 96, "time": anchor, "order": "newest_first"}, headers=HEADERS, timeout=30)
+        response = session.get(endpoint, params={"page": page, "per_page": 96, "time": anchor, "order": "newest_first"}, headers=HEADERS, timeout=30)
         response.raise_for_status(); payload = response.json(); batch = payload.get("items") or []
-        if any((item.get("user") or {}).get("id") != USER_ID for item in batch): raise RuntimeError("Refusing mixed-seller Vinted response")
+        if any(int(item.get("user_id") or (item.get("user") or {}).get("id") or 0) != USER_ID for item in batch): raise RuntimeError("Refusing mixed-seller Vinted response")
         pagination = payload.get("pagination") or {}
         advertised_pages = int(pagination.get("total_pages") or page)
         advertised_entries = pagination.get("total_entries")
@@ -209,7 +209,7 @@ def main():
                 excluded_active.append({"vinted_item_id": item_id, "title": item.get("title") or None, "reason": "manual scope exclusion"})
                 continue
             live_items.append(item)
-            photo = item.get("photo") or {}; high = photo.get("high_resolution") or {}
+            photos = item.get("photos") or []; photo = item.get("photo") or (photos[0] if photos else {}); high = photo.get("high_resolution") or {}
             rows.append({"vinted_item_id": item_id, "captured_at": captured_at, "title": item.get("title"), "price_pln": amount(item.get("price")), "views": item.get("view_count") or 0, "favourites": item.get("favourite_count") or 0, "visible": bool(item.get("is_visible", True)), "photo_url": high.get("url") or photo.get("url"), "condition_label": condition_label(item), "source": "github_actions_vinted"})
         seen_before = prior_snapshot_ids([str(item["id"]) for item in live_items])
         response = requests.post(f"{SUPABASE_URL}/rest/v1/hq_listing_snapshots?on_conflict=vinted_item_id,captured_at", headers={**DB_HEADERS, "Content-Type": "application/json", "Prefer": "resolution=merge-duplicates,return=minimal"}, json=rows, timeout=60)

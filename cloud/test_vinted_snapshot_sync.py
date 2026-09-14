@@ -27,8 +27,10 @@ class Response:
 class Session:
     def __init__(self, pages):
         self.pages = iter(pages)
+        self.calls = []
 
-    def get(self, *_args, **_kwargs):
+    def get(self, *args, **kwargs):
+        self.calls.append((args, kwargs))
         try:
             return Response(next(self.pages))
         except StopIteration as error:
@@ -78,6 +80,9 @@ class SnapshotPaginationTests(unittest.TestCase):
             {"items": [item(2)], "pagination": {"total_pages": 2, "total_entries": 2, "time": "anchor"}},
         ])
         self.assertEqual([row["id"] for row in sync.fetch_items(session)], [1, 2])
+        catalog_url, catalog_kwargs = session.calls[1]
+        self.assertEqual(catalog_url[0], f"https://www.vinted.pl/api/v2/wardrobe/{sync.USER_ID}/items")
+        self.assertNotIn("user_ids[]", catalog_kwargs["params"])
 
     def test_accepts_incomplete_advertised_total(self):
         session = Session([

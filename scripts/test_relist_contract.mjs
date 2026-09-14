@@ -19,6 +19,7 @@ assert.match(migration,/current_snapshot\.price_pln/,'Live price must come from 
 assert.match(migration,/hq_vinted_relist_candidates/,'The transition must persist pending and confirmed relist state.');
 assert.match(migration,/actor = 'MANUAL' and current_new_count < 1/,'Owner confirmation may proceed after one current complete snapshot.');
 assert.match(edge,/apply_hq_system_relist/,'The edge collector must use the atomic system relist RPC.');
+assert.match(edge,/api\/v2\/wardrobe\/\$\{userId\}\/items/,'The edge collector must use Vinted\'s live wardrobe endpoint.');
 assert.match(edge,/resolveNewListings\(live,active\)/,'The edge collector must retry unresolved live listings.');
 assert.match(sharedResolver,/item\.live_title/,'The edge resolver must compare against the prior verified live title.');
 assert.match(sharedResolver,/item\.manual_title/,'The resolver must compare the last owner title from Ledger.');
