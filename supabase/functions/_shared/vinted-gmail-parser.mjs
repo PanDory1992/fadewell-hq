@@ -1,16 +1,26 @@
-export const VINTED_PARSER_VERSION = '2026-08-20.template.v5';
+export const VINTED_PARSER_VERSION = '2026-09-14.template.v6';
 
 export const nonEmptyLines = (body) => body.replace(/\r/g, '').split('\n').map((line) => line.replace(/\s+/g, ' ').trim()).filter(Boolean);
-const normalized = (value) => value.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, ' ').trim();
 const field = (value, status = 'CONFIRMED') => ({ value: value ?? null, status: value === null || value === undefined || value === '' ? 'MISSING' : status });
+const splitLabelLine = (line, label) => {
+  const lineValue = String(line || '').trim();
+  const labelValue = String(label || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = lineValue.match(new RegExp(`^[\\s*_~\\x60]*${labelValue}(?=$|[\\s:*_~\\x60#–—-])(?:[\\s:*_~\\x60–—-]*)(.*)$`, 'i'));
+  return match ? { value: match[1].trim() || null } : null;
+};
 const labelValue = (body, label) => {
-  const all = nonEmptyLines(body); const index = all.findIndex((line) => normalized(line) === normalized(label));
-  return index >= 0 ? all[index + 1] || null : null;
+  const all = nonEmptyLines(body); const index = all.findIndex((line) => splitLabelLine(line, label));
+  if (index < 0) return null;
+  const inline = splitLabelLine(all[index], label)?.value;
+  return inline || all[index + 1] || null;
 };
 const betweenLabels = (body, start, end) => {
-  const all = nonEmptyLines(body); const index = all.findIndex((line) => normalized(line) === normalized(start));
-  const stop = index < 0 ? -1 : all.slice(index + 1).findIndex((line) => normalized(line) === normalized(end));
-  return index < 0 ? [] : all.slice(index + 1, stop < 0 ? undefined : index + 1 + stop);
+  const all = nonEmptyLines(body); const index = all.findIndex((line) => splitLabelLine(line, start));
+  if (index < 0) return [];
+  const inline = splitLabelLine(all[index], start)?.value;
+  const following = all.slice(index + 1);
+  const stop = following.findIndex((line) => splitLabelLine(line, end));
+  return [...(inline ? [inline] : []), ...following.slice(0, stop < 0 ? undefined : stop)];
 };
 const money = (value) => {
   const match = value?.match(/([0-9]+[.,][0-9]+)/); const amount = Number((match?.[1] || '').replace(',', '.'));
