@@ -4,7 +4,7 @@ import vm from 'node:vm';
 
 const source = await readFile(new URL('../apps-script/gmail-intake/Code.gs', import.meta.url), 'utf8');
 
-const makeMessage = ({ id, from = 'Vinted <no-reply@vinted.pl>', date = new Date('2026-09-13T01:00:00Z') }) => ({
+const makeMessage = ({ id, from = 'Vinted <no-reply@vinted.pl>', date = new Date(Date.now() - 60 * 60 * 1000) }) => ({
   getId: () => id,
   getThread: () => ({ getId: () => `thread-${id}` }),
   getFrom: () => from,

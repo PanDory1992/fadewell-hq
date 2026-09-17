@@ -30,6 +30,7 @@ jobs:
         run: |
           node scripts/test_confirmation_needed_gmail_parser.mjs
           node scripts/test_inline_purchase_receipt.mjs
+          node scripts/test_wrapped_sale_pending.mjs
           node scripts/test_apps_script_gmail_intake.mjs
           node scripts/test_gmail_ingest_contract.mjs
           node scripts/test_hq_security_boundary.mjs

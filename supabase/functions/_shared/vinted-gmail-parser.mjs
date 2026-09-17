@@ -1,4 +1,4 @@
-export const VINTED_PARSER_VERSION = '2026-09-14.template.v6';
+export const VINTED_PARSER_VERSION = '2026-09-17.template.v7';
 
 export const nonEmptyLines = (body) => body.replace(/\r/g, '').split('\n').map((line) => line.replace(/\s+/g, ' ').trim()).filter(Boolean);
 const field = (value, status = 'CONFIRMED') => ({ value: value ?? null, status: value === null || value === undefined || value === '' ? 'MISSING' : status });
@@ -31,10 +31,17 @@ const transactionId = (body) => body.match(/Transaction ID\s*:?\s*#?(\d+)/i)?.[1
 const completedTitle = (body) => body.match(/Your sale of\s+([\s\S]*?)\s+was completed successfully/i)?.[1]?.replace(/\s+/g, ' ').trim()
   || (() => { const all = nonEmptyLines(body); const start = all.findIndex((line) => /^Your sale of\s+/i.test(line)); const stop = start < 0 ? -1 : all.slice(start).findIndex((line) => /was completed successfully/i.test(line)); return start >= 0 && stop >= 0 ? all.slice(start, start + stop + 1).join(' ').replace(/^Your sale of\s+/i, '').replace(/\s+was completed successfully\.?$/i, '').trim() : null; })();
 const pendingSale = (body) => {
-  const match = body.match(/has bought\s*\n+([^\n]+)\s*\n+\s*[^\d\n]*([0-9]+[.,][0-9]+)/i);
-  if (match) return { title: match[1].trim(), amount: money(match[2]) };
-  const all = nonEmptyLines(body); const buyerLine = all.findIndex((line) => /has bought$/i.test(line));
-  return { title: buyerLine >= 0 ? all[buyerLine + 1] || null : null, amount: money(all[buyerLine + 2] || null) };
+  // GmailApp plain text includes image alt blocks and hard-wraps long titles.
+  // Only the product block before the payment instructions supplies a price.
+  const all = nonEmptyLines(body.replace(/\[image:[\s\S]*?\]/gi, ''));
+  const buyerLine = all.findIndex((line) => /has bought$/i.test(line));
+  if (buyerLine < 0) return { title: null, amount: null };
+  const product = all.slice(buyerLine + 1);
+  const boundary = product.findIndex((line) => /^(We will transfer|Please send|Here.s what)/i.test(line));
+  const block = product.slice(0, boundary < 0 ? undefined : boundary);
+  const priceIndex = block.findIndex((line) => /^(?:(?:zł|PLN|€|EUR|£|GBP)\s*)?[0-9]+[.,][0-9]{2}(?:\s*(?:zł|PLN|€|EUR|£|GBP))?$/i.test(line));
+  const title = (priceIndex < 0 ? block : block.slice(0, priceIndex)).join(' ').trim() || null;
+  return { title, amount: title && priceIndex >= 0 ? money(block[priceIndex]) : null };
 };
 const NOISE_SUBJECT = /(shipping label|etykiet[aę] wysy[łl]kow|new message|nowa wiadomo|added .* to (their )?(favourites|favorites)|dodał.* do ulubionych|left you a review|wystawi[ał].* opini|price drop|obni[żz]ka ceny|newsletter|promo)/i;
 
