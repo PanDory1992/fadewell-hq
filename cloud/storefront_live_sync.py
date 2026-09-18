@@ -8,7 +8,8 @@ import requests
 
 from storefront_sync import (
     attach_catalog_path, build_storefront_record, category_evidence, fetch_catalog_paths,
-    fetch_storefront_records, fetch_vinted_detail,
+    fetch_storefront_records, fetch_vinted_detail, fetch_owner_measurements,
+    confirmed_owner_measurements,
     record_storefront_sync_result,
     reconcile_storefront_dna, reconcile_storefront_sales, recover_missing_recent_sales,
     is_den_scope_excluded, sync_hq_catalog_metadata,
@@ -84,7 +85,7 @@ def catalog_observation(item, captured_at):
     }
 
 
-def detail_candidates(catalog_items, existing, *, slot=None, shards=DETAIL_REFRESH_SHARDS):
+def detail_candidates(catalog_items, existing, *, slot=None, shards=DETAIL_REFRESH_SHARDS, owner_measurements=None):
     """Prioritize new/unfinished rows, then refresh a small rotating shard."""
     slot = int(time.time() // (15 * 60)) % shards if slot is None else int(slot) % shards
     priority, rotation = [], []
@@ -98,7 +99,10 @@ def detail_candidates(catalog_items, existing, *, slot=None, shards=DETAIL_REFRE
         unfinished = previous and not previous.get("published") and publication_status not in {
             "PUBLISHED", "OUT_OF_SCOPE_CATEGORY", "OUT_OF_SCOPE_DEN", "NO_CATEGORY_EVIDENCE",
         }
-        if not previous or unfinished:
+        owner_values = confirmed_owner_measurements((owner_measurements or {}).get(item_id))
+        previous_values = (previous or {}).get('measurements') or {}
+        owner_changed = any(previous_values.get(key) != value for key, value in owner_values.items())
+        if not previous or unfinished or owner_changed:
             priority.append(item)
         elif int(item_id) % shards == slot:
             rotation.append(item)
@@ -118,6 +122,7 @@ def main():
         catalog_paths = {}
         print("Vinted catalog tree endpoint is unavailable; using category evidence from item details")
     captured_at = datetime.now(timezone.utc).isoformat()
+    owner_measurements = fetch_owner_measurements(SUPABASE_URL, SERVICE_KEY)
     existing = {
         str(row["vinted_item_id"]): row
         for row in fetch_storefront_records(SUPABASE_URL, SERVICE_KEY)
@@ -134,7 +139,7 @@ def main():
     hq_changed = sync_hq_catalog_metadata(SUPABASE_URL, SERVICE_KEY, observations)
     records, failures, deferred = [], [], 0
     detail_blocked = False
-    candidates = detail_candidates(catalog_items, existing)
+    candidates = detail_candidates(catalog_items, existing, owner_measurements=owner_measurements)
     for item in candidates:
         if detail_blocked:
             deferred += 1
@@ -142,7 +147,8 @@ def main():
         try:
             detail = attach_catalog_path(fetch_detail_with_retries(session, item), catalog_paths)
             scope_excluded = is_den_scope_excluded(item["id"])
-            record = build_storefront_record(detail, scope_excluded=scope_excluded)
+            record = build_storefront_record(detail, scope_excluded=scope_excluded,
+                owner_measurements=owner_measurements.get(str(item['id'])))
             records.append(record)
             if scope_excluded and record["garment_type"]:
                 print(f"Excluded from DEN storefront scope: {item['id']} — {record['title']}")

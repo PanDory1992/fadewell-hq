@@ -1,4 +1,4 @@
-"""Build the public FADEWELL storefront record from Vinted-owned facts only."""
+"""Build the public Storefront record from Vinted facts and owner-confirmed HQ measurements."""
 from __future__ import annotations
 
 import html
@@ -334,15 +334,38 @@ def _label(item, key, fallback=None):
     return str(value or fallback or "").strip() or None
 
 
-def build_storefront_record(item, captured_at=None, sold=False, scope_excluded=False):
+def confirmed_owner_measurements(values):
+    """Accept only exact, plausible numeric measurements confirmed in HQ."""
+    result = {}
+    if not isinstance(values, dict):
+        return result
+    for key, value in values.items():
+        if key not in MEASUREMENT_RANGES or not isinstance(value, dict):
+            continue
+        cm = value.get('cm')
+        if value.get('source') != 'OWNER_CONFIRMED' or type(cm) not in (int, float):
+            continue
+        low, high = MEASUREMENT_RANGES[key]
+        if not low <= cm <= high:
+            continue
+        if value.get('min_cm', cm) != cm or value.get('max_cm', cm) != cm:
+            continue
+        result[key] = {'cm': cm, 'min_cm': cm, 'max_cm': cm,
+                       'display': f'{cm:g} cm', 'source': 'OWNER_CONFIRMED'}
+    return result
+
+
+def build_storefront_record(item, captured_at=None, sold=False, scope_excluded=False, *, owner_measurements=None):
     description = str(item.get("description") or "").strip()
     measurements = extract_measurements(description)
+    owner_values = confirmed_owner_measurements(owner_measurements)
+    measurements.update(owner_values)
     garment_type = garment_type_from_vinted_category(item)
     photos = photo_urls(item)
     now = captured_at or datetime.now(timezone.utc).isoformat()
     missing = [key for key in REQUIRED_MEASUREMENTS if key not in measurements]
     publishable = bool(garment_type and description and photos and not missing and not scope_excluded)
-    return {
+    record = {
         "vinted_item_id": str(item["id"]),
         "title": _label(item, "title"),
         "brand": _label(item, "brand_title") or _label(item, "brand"),
@@ -370,6 +393,9 @@ def build_storefront_record(item, captured_at=None, sold=False, scope_excluded=F
             scope_excluded=scope_excluded,
         ),
     }
+    if owner_values:
+        record['publication_notes']['owner_confirmed_measurements'] = sorted(owner_values)
+    return record
 
 
 def build_recovered_sold_record(detail, ledger_item, captured_at=None):
@@ -537,13 +563,40 @@ def fetch_storefront_records(supabase_url, service_key):
         f"{supabase_url.rstrip('/')}/rest/v1/fadewell_storefront_products",
         headers={"apikey": service_key, "Authorization": f"Bearer {service_key}"},
         params={
-            "select": "vinted_item_id,title,brand,size_label,condition_label,photos,price_pln,vinted_url,published,publication_notes",
+            "select": "vinted_item_id,title,brand,size_label,condition_label,photos,price_pln,vinted_url,published,publication_notes,measurements",
             "limit": "1000",
         },
         timeout=60,
     )
     response.raise_for_status()
     return response.json()
+
+
+def fetch_owner_measurements(supabase_url, service_key):
+    """Read field-level owner facts from canonical HQ, never from Vinted."""
+    result, offset = {}, 0
+    while True:
+        response = requests.get(
+            f"{supabase_url.rstrip('/')}/rest/v1/hq_ledger_items",
+            headers={'apikey': service_key, 'Authorization': f'Bearer {service_key}'},
+            params={'select': 'item_id,vinted_item_id,item_dna',
+                    'vinted_item_id': 'not.is.null', 'order': 'item_id.asc',
+                    'limit': 1000, 'offset': offset}, timeout=60,
+        )
+        response.raise_for_status()
+        rows = response.json()
+        for row in rows:
+            values = confirmed_owner_measurements(
+                ((row.get('item_dna') or {}).get('facts') or {}).get('measurements'))
+            if not values:
+                continue
+            listing_id = str(row['vinted_item_id'])
+            if listing_id in result and result[listing_id] != values:
+                raise RuntimeError(f'Conflicting owner measurements for Vinted listing {listing_id}')
+            result[listing_id] = values
+        if len(rows) < 1000:
+            return result
+        offset += 1000
 
 
 def sync_hq_catalog_metadata(supabase_url, service_key, observations):

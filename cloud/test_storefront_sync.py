@@ -40,6 +40,49 @@ class FakeSession:
 
 
 class StorefrontSyncTests(unittest.TestCase):
+    def test_owner_confirmed_missing_length_publishes_without_editing_description(self):
+        description = 'Waist: 38 cm\nFront rise: 31 cm\nInseam: 79 cm\nLeg opening: 18.5 cm'
+        item = {'id': 10038070683, 'catalog': {'title': 'Jeans'},
+                'description': description, 'photos': [{'url': 'cover.jpg'}]}
+        record = sf.build_storefront_record(item, owner_measurements={
+            'overall_length': {'cm': 109, 'source': 'OWNER_CONFIRMED'}})
+        self.assertTrue(record['published'])
+        self.assertEqual(record['measurements']['overall_length']['cm'], 109)
+        self.assertEqual(record['measurements']['overall_length']['source'], 'OWNER_CONFIRMED')
+        self.assertEqual(record['description_raw'], description)
+        self.assertEqual(record['publication_notes']['missing_measurements'], [])
+
+    def test_owner_measurement_wins_over_external_description_on_every_refresh(self):
+        item = {'id': 123, 'category': 'Jeans', 'description': 'Overall length: 107 cm'}
+        owner = {'overall_length': {'cm': 109, 'source': 'OWNER_CONFIRMED'}}
+        for _ in range(2):
+            record = sf.build_storefront_record(item, owner_measurements=owner)
+            self.assertEqual(record['measurements']['overall_length']['cm'], 109)
+            self.assertFalse(record['published'])  # Still missing other measurements/photos.
+
+    def test_unconfirmed_or_invalid_owner_values_cannot_bypass_publication_gate(self):
+        item = {'id': 123, 'category': 'Jeans',
+                'description': 'Waist 38 cm\nRise 31 cm\nInseam 79 cm\nLeg opening 18.5 cm',
+                'photos': [{'url': 'cover.jpg'}]}
+        for value in ({'cm': 109, 'source': 'VINTED_TITLE'},
+                      {'cm': 999, 'source': 'OWNER_CONFIRMED'},
+                      {'cm': True, 'source': 'OWNER_CONFIRMED'},
+                      {'cm': '109', 'source': 'OWNER_CONFIRMED'},
+                      {'cm': 109, 'min_cm': 108, 'max_cm': 110, 'source': 'OWNER_CONFIRMED'}):
+            with self.subTest(value=value):
+                record = sf.build_storefront_record(item, owner_measurements={'overall_length': value})
+                self.assertFalse(record['published'])
+                self.assertNotIn('overall_length', record['measurements'])
+
+    @patch('storefront_sync.requests.get')
+    def test_owner_measurements_are_loaded_by_listing_identity_not_dna_top_level_source(self, get):
+        get.return_value = FakeResponse(payload=[{
+            'item_id': 'DEN-300', 'vinted_item_id': '10038070683',
+            'item_dna': {'updated_by': 'SYSTEM', 'facts': {'measurements': {
+                'overall_length': {'cm': 109, 'source': 'OWNER_CONFIRMED'}}}}}])
+        result = sf.fetch_owner_measurements('https://db.example', 'secret')
+        self.assertEqual(result['10038070683']['overall_length']['cm'], 109)
+
     def test_measurements_are_parsed_and_order_independent(self):
         result = sf.extract_measurements("""Overall length: 108 cm
 Waist: 42 cm
