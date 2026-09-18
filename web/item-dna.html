@@ -68,6 +68,20 @@
           ><label
             >Stan<input id="condition" list="condition-options" placeholder="np. bardzo dobry" /></label
         </div>
+        <section class="card stack">
+          <div>
+            <h3>Pomiary do Storefrontu</h3>
+            <p class="muted small">
+              Wpisz tylko wartości zmierzone i potwierdzone przez Ciebie. Zapis
+              uzupełnia HQ — nie zmienia opisu na Vinted.
+            </p>
+          </div>
+          <div id="measurement-fields" class="two-col"></div>
+          <div class="row-actions">
+            <button id="save-measurements" type="button">Zapisz pomiary</button>
+            <span id="measurement-result" class="muted small"></span>
+          </div>
+        </section>
         <label
           >Dowód / uwaga<textarea
             id="evidence"
@@ -111,6 +125,11 @@
       DNA_SUGGESTIONS,
       resolveBrand,
     } from "./dna-normalize.js?v=20260716e";
+    import {
+      MEASUREMENT_FIELDS,
+      buildOwnerMeasurementPayload,
+      existingOwnerMeasurements,
+    } from "./owner-measurements.js?v=20260918a";
     let queue = [],
       snapshots = [],
       index = 0;
@@ -174,6 +193,10 @@
       fields.forEach(
         (k) => ($(k).value = p[k] || ""),
       );
+      const storedMeasurements = existingOwnerMeasurements(facts(x));
+      MEASUREMENT_FIELDS.forEach(field => {
+        $(`measurement-${field.key}`).value = storedMeasurements[field.key];
+      });
       evidence.value = "";
     }
     async function save() {
@@ -196,6 +219,22 @@
         });
       if (error) throw error;
     }
+    async function saveMeasurements() {
+      const x = queue[index],
+        payload = buildOwnerMeasurementPayload(Object.fromEntries(
+          MEASUREMENT_FIELDS.map(field => [field.key, $(`measurement-${field.key}`).value]),
+        ));
+      if (!Object.keys(payload).length) throw new Error("Wpisz przynajmniej jeden pomiar.");
+      const { data: saved, error } = await sb.rpc("update_hq_owner_measurements", {
+        p: { item_id: x.item_id, measurements: payload, external_key: crypto.randomUUID() },
+      });
+      if (error) throw error;
+      const currentFacts = facts(x), currentMeasurements = currentFacts.measurements || {};
+      x.item_dna = {
+        ...(x.item_dna || {}),
+        facts: { ...currentFacts, measurements: { ...currentMeasurements, ...(saved?.measurements || {}) } },
+      };
+    }
     if (await shell("item-dna.html")) {
       app.hidden = false;
       try {
@@ -210,6 +249,9 @@
               `<datalist id="${key}-options">${values.map((value) => `<option value="${safe(value)}"></option>`).join("")}</datalist>`,
           )
           .join("");
+        $("measurement-fields").innerHTML = MEASUREMENT_FIELDS.map(field =>
+          `<label>${safe(field.label)} (cm)<input id="measurement-${safe(field.key)}" type="number" inputmode="decimal" min="${field.min}" max="${field.max}" step="0.1" placeholder="${field.min}–${field.max}"></label>`,
+        ).join("");
         queue = d.items
           .filter(
             (x) =>
@@ -225,6 +267,23 @@
         const confirmButton = $("confirm"),
           skipButton = $("skip"),
           result = $("result");
+        const measurementButton = $("save-measurements"),
+          measurementResult = $("measurement-result");
+        measurementButton.onclick = async () => {
+          measurementButton.disabled = true;
+          measurementResult.className = "muted small";
+          measurementResult.textContent = "Zapisywanie…";
+          try {
+            await saveMeasurements();
+            measurementResult.className = "ok small";
+            measurementResult.textContent = "Zapisano. Storefront pobierze je automatycznie.";
+          } catch (e) {
+            measurementResult.className = "bad small";
+            measurementResult.textContent = e.message || "Nie udało się zapisać pomiarów.";
+          } finally {
+            measurementButton.disabled = false;
+          }
+        };
         confirmButton.onclick = async () => {
           confirmButton.disabled = true;
           skipButton.disabled = true;

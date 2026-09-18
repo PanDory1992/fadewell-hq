@@ -41,6 +41,8 @@ jobs:
         run: node scripts/test_relist_contract.mjs
       - name: Check operations state visibility
         run: node web/system.test.mjs
+      - name: Check owner-confirmed measurement form
+        run: node web/owner-measurements.test.mjs
       - name: Check experiment engine contract
         run: node scripts/test_experiment_engine.mjs
       - name: Check sourcing capacity gate and UTF-8 repair

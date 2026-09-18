@@ -28,6 +28,8 @@ jobs:
         run: node web/sourcing.test.mjs
       - name: Check public OAuth pages
         run: node web/oauth-pages.test.mjs
+      - name: Check owner-confirmed measurement form
+        run: node web/owner-measurements.test.mjs
       - name: Reject malformed UTF-8 and mojibake
         run: node scripts/check_mojibake.mjs .
       - id: configure-pages
