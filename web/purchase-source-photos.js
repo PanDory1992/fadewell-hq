@@ -22,7 +22,7 @@ export function purchaseGallery(record) {
 
 export function purchaseSourceForm(record) {
   if (record?.urls?.length) return '';
-  return `<div class="purchase-source"><label for="purchaseSourceUrl">Link do ogłoszenia zakupu z Vinted</label><div class="row-actions"><input id="purchaseSourceUrl" type="url" placeholder="https://www.vinted.pl/items/…" autocomplete="off"><button id="archivePurchasePhotos" type="button">Zapisz 3 zdjęcia zakupu</button></div><p id="archivePurchaseStatus" class="muted small">HQ zapisze pierwsze dostępne zdjęcia w prywatnym archiwum.</p></div>`;
+  return `<div class="purchase-source"><label for="purchaseSourceUrl">Link do ogłoszenia zakupu z Vinted</label><div class="row-actions"><input id="purchaseSourceUrl" type="url" placeholder="https://www.vinted.pl/items/…" autocomplete="off"><button id="archivePurchasePhotos" type="button">Zapisz 3 zdjęcia zakupu</button></div><label for="purchaseSourceFiles">Gdy Vinted blokuje pobranie przez HQ: wybierz pierwsze trzy zdjęcia z ogłoszenia w kolejności</label><input id="purchaseSourceFiles" type="file" accept="image/webp,image/jpeg,image/png" multiple><p id="archivePurchaseStatus" class="muted small">HQ zapisze pierwsze dostępne zdjęcia w prywatnym archiwum.</p></div>`;
 }
 
 export function bindPurchaseSourceForm(sb, itemId, onSaved) {
@@ -35,8 +35,12 @@ export function bindPurchaseSourceForm(sb, itemId, onSaved) {
     if (!/^https:\/\/(?:www\.)?vinted\.pl\/items\/\d+/i.test(listingUrl)) { status.textContent = 'Wklej link do konkretnego ogłoszenia Vinted.'; return; }
     button.disabled = true; status.textContent = 'Pobieram i zapisuję zdjęcia…';
     try {
-      const {data, error} = await sb.functions.invoke('hq-purchase-photo-archive', {body: {item_id: itemId, listing_url: listingUrl}});
-      if (error || data?.error) throw new Error(data?.error || error?.message || 'Nie udało się zapisać zdjęć.');
+      const files = [...document.getElementById('purchaseSourceFiles').files];
+      if (files.length > 3) throw new Error('Wybierz maksymalnie trzy zdjęcia.');
+      const images = await Promise.all(files.map(file => new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = () => reject(new Error('Nie udało się odczytać zdjęcia.')); reader.readAsDataURL(file); })));
+      const {data, error} = await sb.functions.invoke('hq-purchase-photo-archive', {body: {item_id: itemId, listing_url: listingUrl, images}});
+      const response = error?.context && typeof error.context.json === 'function' ? await error.context.json().catch(() => null) : null;
+      if (error || data?.error) throw new Error(response?.error || data?.error || error?.message || 'Nie udało się zapisać zdjęć.');
       status.textContent = `Zapisano ${data.archived} zdjęcia.`;
       await onSaved();
     } catch (error) { status.textContent = error.message || String(error); button.disabled = false; }

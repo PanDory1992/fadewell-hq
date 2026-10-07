@@ -10,7 +10,7 @@
 <script type="module">
 import{shell,data,$,safe,money,sb,statusClass,statusLabel,itemPhoto,date,dateTime,itemTitle,isDenimItem,installPreviousTitleProvenance}from'./hq.js?v=20261007-purchase-photos';
 import{buildTimeline}from'./timeline.js?v=20260820-title-provenance';
-import{loadPurchasePhotos,purchaseGallery,purchaseSourceForm,bindPurchaseSourceForm}from'./purchase-source-photos.js?v=20261007';
+import{loadPurchasePhotos,purchaseGallery,purchaseSourceForm,bindPurchaseSourceForm}from'./purchase-source-photos.js?v=20261007-upload';
 let all=[],snapshots=[],purchasePhotos=new Map();installPreviousTitleProvenance(detailBody,()=>all);const value=n=>Number(n)||0;
 const salePrice=item=>item.sale_price_arbitrage??item.sale_price_recycled??null;
 const realisedProfit=item=>item.net_profit??(item.ledger_status==='SOLD'&&salePrice(item)!==null?value(salePrice(item))-value(item.total_capital):null);

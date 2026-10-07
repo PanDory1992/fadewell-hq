@@ -49,29 +49,45 @@ Deno.serve(async request => {
   if (existing) return reply({ error: 'Purchase photos already archived for this DEN; existing evidence was preserved', source_listing_id: existing.source_listing_id }, 409);
 
   const sourceUrl = `https://www.vinted.pl/items/${id}`;
-  let photos: string[];
-  try {
-    const page = await fetch(sourceUrl, { headers: { 'user-agent': 'Mozilla/5.0 (compatible; FADEWELL-HQ/1.0)' } });
-    if (!page.ok) return reply({ error: `Vinted listing unavailable (${page.status})` }, 422);
-    photos = firstPhotos(await page.text());
-  } catch { return reply({ error: 'Could not fetch Vinted listing' }, 422); }
-  if (!photos.length) return reply({ error: 'No original listing photos available' }, 422);
+  const supplied = Array.isArray(input.images) ? input.images : [];
+  if (supplied.length > 3) return reply({ error: 'At most three images are allowed' }, 400);
+  let photos: string[] = [];
+  if (!supplied.length) {
+    try {
+      const page = await fetch(sourceUrl, { headers: { 'user-agent': 'Mozilla/5.0 (compatible; FADEWELL-HQ/1.0)' } });
+      if (!page.ok) return reply({ error: `Vinted listing unavailable (${page.status}); upload the original photos from your browser` }, 422);
+      photos = firstPhotos(await page.text());
+    } catch { return reply({ error: 'Could not fetch Vinted listing; upload the original photos from your browser' }, 422); }
+    if (!photos.length) return reply({ error: 'No original listing photos available; upload them from your browser' }, 422);
+  }
 
   const paths: string[] = [];
-  for (let index = 0; index < photos.length; index++) {
-    let image: Response;
-    try { image = await fetch(photos[index]); } catch { return reply({ error: `Could not fetch photo ${index + 1}` }, 422); }
-    const type = (image.headers.get('content-type') || '').split(';')[0].toLowerCase();
-    if (!image.ok || !['image/webp', 'image/jpeg', 'image/png'].includes(type)) return reply({ error: `Photo ${index + 1} unavailable` }, 422);
-    const bytes = new Uint8Array(await image.arrayBuffer());
+  for (let index = 0; index < (supplied.length || photos.length); index++) {
+    let type: string;
+    let bytes: Uint8Array;
+    if (supplied.length) {
+      const value = String(supplied[index] || '');
+      const match = /^data:(image\/(?:webp|jpeg|png));base64,([A-Za-z0-9+/=]+)$/.exec(value);
+      if (!match) return reply({ error: `Photo ${index + 1} must be a JPEG, PNG or WebP file` }, 400);
+      type = match[1];
+      try { bytes = Uint8Array.from(atob(match[2]), c => c.charCodeAt(0)); } catch { return reply({ error: `Photo ${index + 1} is invalid` }, 400); }
+    } else {
+      let image: Response;
+      try { image = await fetch(photos[index]); } catch { return reply({ error: `Could not fetch photo ${index + 1}` }, 422); }
+      type = (image.headers.get('content-type') || '').split(';')[0].toLowerCase();
+      if (!image.ok || !['image/webp', 'image/jpeg', 'image/png'].includes(type)) return reply({ error: `Photo ${index + 1} unavailable` }, 422);
+      bytes = new Uint8Array(await image.arrayBuffer());
+    }
     if (!bytes.length || bytes.length > 5_242_880) return reply({ error: `Photo ${index + 1} has invalid size` }, 422);
+    const valid = type === 'image/jpeg' ? bytes[0] === 0xff && bytes[1] === 0xd8 : type === 'image/png' ? bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47 : new TextDecoder().decode(bytes.slice(0, 4)) === 'RIFF' && new TextDecoder().decode(bytes.slice(8, 12)) === 'WEBP';
+    if (!valid) return reply({ error: `Photo ${index + 1} content does not match its type` }, 400);
     const extension = type === 'image/jpeg' ? 'jpg' : type === 'image/png' ? 'png' : 'webp';
     const path = `${itemId}/${id}/${index + 1}.${extension}`;
     const { error } = await db.storage.from(bucket).upload(path, bytes, { contentType: type, upsert: false });
     if (error && !/already exists|duplicate/i.test(error.message)) return reply({ error: `Photo ${index + 1} archive failed` }, 500);
     paths.push(path);
   }
-  const { error: saveError } = await db.from('hq_purchase_source_photos').insert({ item_id: itemId, source_listing_id: id, source_listing_url: sourceUrl, photo_paths: paths });
+  const { error: saveError } = await db.from('hq_purchase_source_photos').insert({ item_id: itemId, source_listing_id: id, source_listing_url: sourceUrl, photo_paths: paths, capture_source: supplied.length ? 'OWNER_UPLOADED_VINTED_IMAGES' : 'OWNER_CONFIRMED_VINTED_URL' });
   if (saveError) return reply({ error: saveError.message }, 500);
   return reply({ item_id: itemId, source_listing_id: id, archived: paths.length });
 });
