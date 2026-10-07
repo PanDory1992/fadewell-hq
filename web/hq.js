@@ -173,4 +173,4 @@ export async function data(){
 
 export const statusClass=status=>status==='SOLD'?'sold':status==='LISTED-BACKLOG'?'listed':status==='VOIDED'?'voided':'unlisted';
 export const statusLabel=status=>status==='LISTED-BACKLOG'?'Wystawione':status==='UNLISTED-BACKLOG'?'Do wystawienia':status==='SOLD'?'Sprzedane':status==='VOIDED'?'Anulowane':status||'—';
-export function itemPhoto(item,snapshots){const snapshot=snapshots?.find(row=>String(row.vinted_item_id)===String(item.vinted_item_id));return snapshot?.photo_url||item.last_photo_url||'';}
+export function itemPhoto(item,snapshots,purchasePhotos){const snapshot=snapshots?.find(row=>String(row.vinted_item_id)===String(item.vinted_item_id));const purchase=purchasePhotos?.get(item.item_id)?.urls?.[0];return item.ledger_status==='UNLISTED-BACKLOG'?(purchase||snapshot?.photo_url||item.last_photo_url||''):(snapshot?.photo_url||item.last_photo_url||'');}
