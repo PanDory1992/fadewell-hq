@@ -254,13 +254,13 @@ def process(hq, vinted, orders, job):
 def main():
     if not HQ_URL or not HQ_KEY:
         raise RuntimeError("HQ service credentials are not configured")
-    if not COOKIE:
-        raise RuntimeError("Vinted buyer session is not configured")
     hq = Hq()
     jobs = hq.table("hq_purchase_photo_ingest_jobs", params={"select": "*", "state": "eq.PENDING", "order": "created_at.asc", "limit": "30"})
     if not jobs:
         print("No pending purchase-photo jobs")
         return
+    if not COOKIE:
+        raise RuntimeError("Vinted buyer session is not configured")
     vinted = Vinted()
     orders = vinted.orders()
     failed = 0

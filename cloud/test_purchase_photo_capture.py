@@ -1,9 +1,22 @@
 import unittest
+from unittest.mock import patch
 
-from purchase_photo_capture import first_product_photos, matching_order, preloaded_orders, unique_bundle_mapping
+from purchase_photo_capture import first_product_photos, main, matching_order, preloaded_orders, unique_bundle_mapping
 
 
 class CaptureTest(unittest.TestCase):
+    def test_empty_queue_does_not_need_vinted_session(self):
+        class EmptyHq:
+            def table(self, *_args, **_kwargs):
+                return []
+        with patch('purchase_photo_capture.HQ_URL', 'https://example.supabase.co'), \
+             patch('purchase_photo_capture.HQ_KEY', 'test'), \
+             patch('purchase_photo_capture.COOKIE', ''), \
+             patch('purchase_photo_capture.Hq', return_value=EmptyHq()), \
+             patch('purchase_photo_capture.Vinted') as vinted:
+            main()
+            vinted.assert_not_called()
+
     def test_server_order_payload(self):
         page = '<script>self.__next_f.push([1,"2d:[\\\"x\\\",{\\\"preloadedOrders\\\":{\\\"orders\\\":[{\\\"transactionId\\\":123,\\\"conversationId\\\":\\\"456\\\"}]}}]"])</script>'
         self.assertEqual(preloaded_orders(page)[0]["conversationId"], "456")
