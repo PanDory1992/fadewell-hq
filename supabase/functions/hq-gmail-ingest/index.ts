@@ -11,6 +11,7 @@ const MAX_MESSAGES = 50;
 const MAX_BODY_LENGTH = 750_000;
 const GOOGLE_JWKS = createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2/v3/certs'));
 const TRUSTED_GOOGLE_ISSUERS = ['https://accounts.google.com', 'accounts.google.com'];
+const githubToken = Deno.env.get('GITHUB_WORKFLOW_DISPATCH_TOKEN');
 
 type IncomingMessage = {
   gmail_message_id: string;
@@ -75,6 +76,16 @@ const finishSyncRun = async (id: string | null, payload: Record<string, unknown>
   const response = await rest(`hq_email_sync_runs?id=eq.${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(payload) });
   if (!response.ok) console.error('Could not finish Gmail ingest run', await response.text());
 };
+const dispatchPurchasePhotos = async () => {
+  if (!githubToken) throw new Error('Purchase photo capture: GitHub workflow token is not configured.');
+  const response = await fetch('https://api.github.com/repos/PanDory1992/fadewell-hq/actions/workflows/purchase-photo-capture.yml/dispatches', {
+    method: 'POST',
+    headers: { accept: 'application/vnd.github+json', authorization: `Bearer ${githubToken}`, 'content-type': 'application/json', 'x-github-api-version': '2022-11-28', 'user-agent': 'fadewell-hq-gmail-ingest' },
+    body: JSON.stringify({ ref: 'main' }),
+    signal: AbortSignal.timeout(15_000)
+  });
+  if (!response.ok) throw new Error(`Purchase photo workflow dispatch HTTP ${response.status}`);
+};
 const validateMessage = (value: unknown): IncomingMessage => {
   if (!value || typeof value !== 'object') throw new Error('Each Gmail message must be an object.');
   const message = value as Record<string, unknown>;
@@ -107,7 +118,7 @@ Deno.serve(async request => {
     const payload = await request.json();
     if (payload?.source !== 'fadewell_apps_script_v1') throw new Error('Unknown Gmail intake source.');
     if (!Array.isArray(payload.messages) || payload.messages.length > MAX_MESSAGES) throw new Error(`messages must contain at most ${MAX_MESSAGES} entries.`);
-    const messages = payload.messages.map(validateMessage);
+    const messages: IncomingMessage[] = payload.messages.map(validateMessage);
     if (new Set(messages.map(message => message.gmail_message_id)).size !== messages.length) throw new Error('Duplicate Gmail message IDs in one batch.');
 
     await patchSyncState({ last_attempt_at: startedAt, last_error: null });
@@ -178,6 +189,21 @@ Deno.serve(async request => {
       if (!intakeResponse.ok) throw new Error(`Gmail event ${message.gmail_message_id} was not recorded: ${await intakeResponse.text()}`);
       const outcome = await intakeResponse.json();
       let resolvedState = outcome.state;
+      if (outcome.state === 'AUTO_APPLIED' && (eventType === 'PURCHASE_CONFIRMED' || eventType === 'PURCHASE_BUNDLE') && transaction) {
+        let denIds = eventType === 'PURCHASE_BUNDLE' ? outcome.item_ids : [outcome.item_id];
+        if (outcome.duplicate) {
+          const prior = await readJson(await rest(`hq_external_events?select=matched_item_id,evidence&source=eq.GMAIL_VINTED&source_event_id=eq.${encodeURIComponent(message.gmail_message_id)}&limit=1`), 'Prior purchase lookup');
+          denIds = eventType === 'PURCHASE_BUNDLE' ? prior[0]?.evidence?.bundle_item_ids : [prior[0]?.matched_item_id];
+        }
+        if (!Array.isArray(denIds) || denIds.length !== (bundleItems.length || 1) || denIds.some((value: unknown) => !/^DEN-\d+$/.test(String(value)))) {
+          throw new Error(`Purchase photo job ${message.gmail_message_id} has no verified DEN mapping`);
+        }
+        const queued = await rest('hq_purchase_photo_ingest_jobs?on_conflict=source_event_id', {
+          method: 'POST', headers: { prefer: 'resolution=ignore-duplicates' },
+          body: JSON.stringify({ source_event_id: message.gmail_message_id, vinted_transaction_id: transaction, occurred_on: message.received_at.slice(0, 10), paid_amount: amount, receipt_title: itemTitle, bundle_titles: bundleItems, den_item_ids: denIds })
+        });
+        if (!queued.ok) throw new Error(`Purchase photo job ${message.gmail_message_id} was not queued: ${await queued.text()}`);
+      }
       if (eventType === 'SALE_PENDING' && outcome.state === 'NEEDS_REVIEW') {
         const reconciliation = await rest('rpc/reconcile_hq_manual_sale_evidence', { method: 'POST', body: JSON.stringify({ p_source_event_id: message.gmail_message_id }) });
         const reconciliationOutcome = await readJson(reconciliation, `Manual-sale reconciliation ${message.gmail_message_id}`);
@@ -192,6 +218,11 @@ Deno.serve(async request => {
         else if (resolvedState === 'NEEDS_REVIEW') review += 1;
       }
     }
+
+    // The Gmail Apps Script retries the same overlap on failure. Pending rows
+    // make both repeated mail delivery and workflow-dispatch retries safe.
+    const pending = await readJson(await rest('hq_purchase_photo_ingest_jobs?select=source_event_id&state=eq.PENDING&limit=1'), 'Pending purchase photo lookup');
+    if (pending.length) await dispatchPurchasePhotos();
 
     const finishedAt = new Date().toISOString();
     const counts = { last_scanned_count: scanned, last_received_count: received, last_applied_count: applied, last_review_count: review, last_noise_count: noise, last_trashed_count: 0 };

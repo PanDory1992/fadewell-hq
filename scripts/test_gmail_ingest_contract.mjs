@@ -13,6 +13,8 @@ assert.match(source, /record_hq_gmail_evidence/, 'the existing immutable evidenc
 assert.match(source, /apply_hq_gmail_intake/, 'the existing guarded ledger intake must be preserved');
 assert.match(source, /reconcile_hq_manual_sale_evidence/, 'manual-sale reconciliation must remain active');
 assert.match(source, /reconcile_hq_vinted_transaction_message/, 'transaction reconciliation must remain active');
+assert.match(source, /hq_purchase_photo_ingest_jobs/, 'confirmed purchases must queue their original-photo capture');
+assert.match(source, /purchase-photo-capture\.yml\/dispatches/, 'Gmail intake must trigger the photo worker on pending purchases');
 assert.doesNotMatch(source, /GMAIL_CLIENT_ID|GMAIL_CLIENT_SECRET|refresh_token/, 'the new transport must not depend on a custom Google Cloud OAuth client');
 assert.doesNotMatch(source, /GMAIL_APPS_SCRIPT_SECRET/, 'the transport must not add a long-lived shared secret');
 

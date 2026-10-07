@@ -1,0 +1,28 @@
+name: Capture Vinted Purchase Photos
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vinted-purchase-photo-capture
+  cancel-in-progress: false
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: pip install --disable-pip-version-check cloudscraper requests
+      - name: Capture queued Gmail purchases
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          VINTED_BUYER_COOKIE: ${{ secrets.VINTED_BUYER_COOKIE }}
+        run: python cloud/purchase_photo_capture.py
