@@ -20,7 +20,10 @@ function firstPhotos(html: string): string[] {
   const images: string[] = [];
   for (const match of html.matchAll(/<link\s+[^>]*rel="preload"[^>]*as="image"[^>]*href="([^"]+)"/g)) {
     const image = new URL(match[1].replaceAll('&amp;', '&'));
-    if (!/^images\d*\.vinted\.net$/.test(image.hostname) || image.protocol !== 'https:') continue;
+    if (!/^images\d*\.vinted\.net$/.test(image.hostname) || image.protocol !== 'https:') {
+      if (images.length) break;
+      continue;
+    }
     if (!images.includes(image.href)) images.push(image.href);
     if (images.length === 3) break;
   }
@@ -44,9 +47,11 @@ Deno.serve(async request => {
   if (!/^DEN-\d+$/.test(itemId) || !id) return reply({ error: 'Known DEN and Vinted item URL required' }, 400);
   const { data: item, error: itemError } = await db.from('hq_ledger_items').select('item_id,ledger_status').eq('item_id', itemId).maybeSingle();
   if (itemError || !item || item.ledger_status === 'VOIDED') return reply({ error: 'Active DEN item required' }, 400);
-  const { data: existing, error: existingError } = await db.from('hq_purchase_source_photos').select('item_id,source_listing_id,photo_paths').eq('item_id', itemId).maybeSingle();
+  const { data: existing, error: existingError } = await db.from('hq_purchase_source_photos').select('*').eq('item_id', itemId).maybeSingle();
   if (existingError) return reply({ error: existingError.message }, 500);
-  if (existing) return reply({ error: 'Purchase photos already archived for this DEN; existing evidence was preserved', source_listing_id: existing.source_listing_id }, 409);
+  const replace = input.replace === true;
+  if (existing && !replace) return reply({ error: 'Purchase photos already archived for this DEN; existing evidence was preserved', source_listing_id: existing.source_listing_id }, 409);
+  if (!existing && replace) return reply({ error: 'No purchase photos to correct for this DEN' }, 400);
 
   const sourceUrl = `https://www.vinted.pl/items/${id}`;
   const supplied = Array.isArray(input.images) ? input.images : [];
@@ -62,6 +67,7 @@ Deno.serve(async request => {
   }
 
   const paths: string[] = [];
+  const revision = Date.now();
   for (let index = 0; index < (supplied.length || photos.length); index++) {
     let type: string;
     let bytes: Uint8Array;
@@ -82,12 +88,17 @@ Deno.serve(async request => {
     const valid = type === 'image/jpeg' ? bytes[0] === 0xff && bytes[1] === 0xd8 : type === 'image/png' ? bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47 : new TextDecoder().decode(bytes.slice(0, 4)) === 'RIFF' && new TextDecoder().decode(bytes.slice(8, 12)) === 'WEBP';
     if (!valid) return reply({ error: `Photo ${index + 1} content does not match its type` }, 400);
     const extension = type === 'image/jpeg' ? 'jpg' : type === 'image/png' ? 'png' : 'webp';
-    const path = `${itemId}/${id}/${index + 1}.${extension}`;
+    const path = `${itemId}/${id}/${replace ? `${revision}/` : ''}${index + 1}.${extension}`;
     const { error } = await db.storage.from(bucket).upload(path, bytes, { contentType: type, upsert: false });
     if (error && !/already exists|duplicate/i.test(error.message)) return reply({ error: `Photo ${index + 1} archive failed` }, 500);
     paths.push(path);
   }
-  const { error: saveError } = await db.from('hq_purchase_source_photos').insert({ item_id: itemId, source_listing_id: id, source_listing_url: sourceUrl, photo_paths: paths, capture_source: supplied.length ? 'OWNER_UPLOADED_VINTED_IMAGES' : 'OWNER_CONFIRMED_VINTED_URL' });
+  if (existing) {
+    const { error: historyError } = await db.from('hq_purchase_source_photo_revisions').insert({ item_id: itemId, source_listing_id: existing.source_listing_id, source_listing_url: existing.source_listing_url, photo_paths: existing.photo_paths, captured_at: existing.captured_at, capture_source: existing.capture_source });
+    if (historyError) return reply({ error: historyError.message }, 500);
+  }
+  const record = { source_listing_id: id, source_listing_url: sourceUrl, photo_paths: paths, captured_at: new Date().toISOString(), capture_source: replace ? 'OWNER_CORRECTED_VINTED_IMAGES' : supplied.length ? 'OWNER_UPLOADED_VINTED_IMAGES' : 'OWNER_CONFIRMED_VINTED_URL' };
+  const { error: saveError } = existing ? await db.from('hq_purchase_source_photos').update(record).eq('item_id', itemId) : await db.from('hq_purchase_source_photos').insert({ item_id: itemId, ...record });
   if (saveError) return reply({ error: saveError.message }, 500);
   return reply({ item_id: itemId, source_listing_id: id, archived: paths.length });
 });
