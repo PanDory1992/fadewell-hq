@@ -1,6 +1,8 @@
 name: Capture Vinted Purchase Photos
 
 on:
+  schedule:
+    - cron: '17 */4 * * *'
   workflow_dispatch:
     inputs:
       probe_transaction_id:
@@ -11,6 +13,10 @@ on:
         description: 'Optional verified single-item Gmail purchase receipt to recapture'
         required: false
         type: string
+      verify_refresh:
+        description: 'Force one refresh-token test while checking the buyer session'
+        required: false
+        type: boolean
 
 permissions:
   contents: read
@@ -28,12 +34,25 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
-      - run: pip install --disable-pip-version-check cloudscraper requests
+      - uses: actions/cache/restore@v4
+        with:
+          path: .vinted-session.enc
+          key: vinted-buyer-session-${{ github.run_id }}
+          restore-keys: vinted-buyer-session-
+      - run: pip install --disable-pip-version-check cloudscraper requests cryptography
       - name: Capture queued Gmail purchases
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           VINTED_BUYER_COOKIE: ${{ secrets.VINTED_BUYER_COOKIE }}
+          VINTED_SESSION_STATE_FILE: .vinted-session.enc
+          VINTED_REFRESH_ONLY: ${{ github.event_name == 'schedule' }}
+          VINTED_FORCE_REFRESH: ${{ inputs.verify_refresh }}
           VINTED_PROBE_TRANSACTION_ID: ${{ inputs.probe_transaction_id }}
           VINTED_REPLAY_RECEIPT_ID: ${{ inputs.replay_receipt_id }}
         run: python cloud/purchase_photo_capture.py
+      - uses: actions/cache/save@v4
+        if: ${{ always() && hashFiles('.vinted-session.enc') != '' }}
+        with:
+          path: .vinted-session.enc
+          key: vinted-buyer-session-${{ github.run_id }}

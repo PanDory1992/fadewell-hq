@@ -19,7 +19,7 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: '22'
-      - run: pip install --disable-pip-version-check cloudscraper requests
+      - run: pip install --disable-pip-version-check cloudscraper requests cryptography
       - name: Run Python tests
         run: python -m unittest discover -s cloud -p 'test_*.py'
       - name: Check HQ text encoding

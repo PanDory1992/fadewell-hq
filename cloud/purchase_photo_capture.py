@@ -6,26 +6,70 @@ Every downloaded photo is retained even when a same-title bundle needs review.
 """
 
 import html
+import base64
+import hashlib
 import json
 import os
 import re
 import sys
+import time
 import unicodedata
 from datetime import date, datetime
+from pathlib import Path
 from urllib.parse import urlparse
 
 import cloudscraper
 import requests
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 
 HQ_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
 HQ_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
 COOKIE = os.environ.get("VINTED_BUYER_COOKIE", "")
+SESSION_FILE = os.environ.get("VINTED_SESSION_STATE_FILE", "")
 BUCKET = "hq-purchase-photos"
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 ORDER_API = "https://api.vinted.pl/escrow-orders/api/v2/current-user/escrow-orders"
 SCRIPT_RE = re.compile(r'self\.__next_f\.push\(\[1,("(?:\\.|[^"\\])*")\]\)', re.S)
 PRELOAD_RE = re.compile(r'<link\s+[^>]*rel="preload"[^>]*as="image"[^>]*href="([^"]+)"', re.I)
+SESSION_AAD = b"fadewell-vinted-buyer-session-v1"
+
+
+def _session_key():
+    if not COOKIE:
+        raise RuntimeError("Vinted buyer bootstrap secret is not configured")
+    return hashlib.sha256(COOKIE.encode("utf-8")).digest()
+
+
+def load_session_cookie():
+    if not SESSION_FILE or not Path(SESSION_FILE).exists():
+        return COOKIE
+    sealed = base64.b64decode(Path(SESSION_FILE).read_bytes(), validate=True)
+    if len(sealed) < 29:
+        raise RuntimeError("Encrypted Vinted session cache is invalid")
+    return AESGCM(_session_key()).decrypt(sealed[:12], sealed[12:], SESSION_AAD).decode("utf-8")
+
+
+def save_session_cookie(cookie_header):
+    if not SESSION_FILE:
+        return
+    target = Path(SESSION_FILE)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    nonce = os.urandom(12)
+    sealed = base64.b64encode(nonce + AESGCM(_session_key()).encrypt(nonce, cookie_header.encode("utf-8"), SESSION_AAD))
+    temporary = target.with_suffix(target.suffix + ".tmp")
+    temporary.write_bytes(sealed)
+    os.chmod(temporary, 0o600)
+    os.replace(temporary, target)
+
+
+def access_token_expires_soon(token):
+    try:
+        encoded = token.split(".")[1]
+        payload = json.loads(base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4)))
+        return int(payload["exp"]) <= time.time() + 12 * 3600
+    except (IndexError, KeyError, ValueError, TypeError):
+        return False
 
 
 def normalized(value):
@@ -89,15 +133,21 @@ class Hq:
 
 
 class Vinted:
-    def __init__(self):
+    def __init__(self, cookie_header=None, force_refresh=False):
+        cookie_header = COOKIE if cookie_header is None else cookie_header
         self.session = cloudscraper.create_scraper()
         self.session.headers.update({"User-Agent": USER_AGENT, "Accept-Language": "pl-PL,pl;q=0.9,en;q=0.7"})
-        for part in COOKIE.split(";"):
+        for part in cookie_header.split(";"):
             name, sep, value = part.strip().partition("=")
             if sep and name:
                 self.session.cookies.set(name, value, domain=".vinted.pl")
-        if not self.session.cookies.get("access_token_web"):
+        access_token = self.session.cookies.get("access_token_web", domain=".vinted.pl")
+        if not access_token:
             raise RuntimeError("Vinted buyer session is missing or incomplete")
+        if force_refresh or access_token_expires_soon(access_token):
+            self.refresh()
+            # A rotated refresh token must survive even if a later page read fails.
+            save_session_cookie(self.cookie_header())
         home = self.session.get("https://www.vinted.pl", timeout=30)
         home.raise_for_status()
         if 'falka.falka35' not in home.text:
@@ -109,6 +159,28 @@ class Vinted:
             self.api_headers["X-Anon-Id"] = anon
         if csrf:
             self.api_headers["X-CSRF-Token"] = html.unescape(csrf.group(1))
+
+    def refresh(self):
+        refresh_token = self.session.cookies.get("refresh_token_web", domain=".vinted.pl")
+        if not refresh_token:
+            raise RuntimeError("Vinted session has no refresh token")
+        response = self.session.post("https://www.vinted.pl/oauth/token",
+                                     json={"grant_type": "refresh_token", "refresh_token": refresh_token},
+                                     headers={"Accept": "application/json", "Referer": "https://www.vinted.pl/"}, timeout=30)
+        response.raise_for_status()
+        payload = response.json()
+        if not payload.get("access_token"):
+            raise RuntimeError("Vinted refresh returned no access token")
+        self.session.cookies.set("access_token_web", payload["access_token"], domain=".vinted.pl")
+        if payload.get("refresh_token"):
+            self.session.cookies.set("refresh_token_web", payload["refresh_token"], domain=".vinted.pl")
+        renewed = payload.get("refresh_token") or response.cookies.get("refresh_token_web") or self.session.cookies.get("refresh_token_web", domain=".vinted.pl")
+        print(f"Vinted access refreshed; refresh token rotated: {renewed != refresh_token}")
+
+    def cookie_header(self):
+        cookies = {cookie.name: cookie.value for cookie in self.session.cookies
+                   if cookie.domain.lstrip(".") in {"vinted.pl", "www.vinted.pl"}}
+        return "; ".join(f"{name}={value}" for name, value in cookies.items())
 
     def orders(self):
         found = []
@@ -283,7 +355,8 @@ def main():
             raise ValueError("Probe transaction ID must be numeric")
         if not COOKIE:
             raise RuntimeError("Vinted buyer session is not configured")
-        vinted = Vinted()
+        vinted = Vinted(load_session_cookie(), force_refresh=os.environ.get("VINTED_FORCE_REFRESH") == "true")
+        save_session_cookie(vinted.cookie_header())
         matches = [row for row in vinted.orders() if str(row.get("transaction_id") or row.get("transactionId")) == probe_transaction_id]
         if len(matches) != 1:
             raise RuntimeError("Probe transaction is not uniquely present in buyer order history")
@@ -303,13 +376,19 @@ def main():
     if replay_receipt_id:
         queue_single_receipt_replay(hq, replay_receipt_id)
     jobs = hq.table("hq_purchase_photo_ingest_jobs", params={"select": "*", "state": "eq.PENDING", "order": "created_at.asc", "limit": "30"})
-    if not jobs:
+    refresh_only = os.environ.get("VINTED_REFRESH_ONLY") == "true"
+    if not jobs and not refresh_only:
         print("No pending purchase-photo jobs")
         return
     if not COOKIE:
         raise RuntimeError("Vinted buyer session is not configured")
-    vinted = Vinted()
+    vinted = Vinted(load_session_cookie(), force_refresh=os.environ.get("VINTED_FORCE_REFRESH") == "true")
+    save_session_cookie(vinted.cookie_header())
+    if not jobs:
+        print("Vinted buyer session checked and preserved")
+        return
     orders = vinted.orders()
+    save_session_cookie(vinted.cookie_header())
     failed = 0
     for job in jobs:
         try:

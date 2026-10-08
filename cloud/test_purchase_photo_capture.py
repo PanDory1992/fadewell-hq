@@ -1,12 +1,51 @@
+import base64
+import json
+import tempfile
+import time
 import unittest
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import requests
 
-from purchase_photo_capture import Vinted, first_product_photos, main, matching_order, preloaded_orders, unique_bundle_mapping
+from purchase_photo_capture import Vinted, access_token_expires_soon, first_product_photos, load_session_cookie, main, matching_order, preloaded_orders, save_session_cookie, unique_bundle_mapping
 
 
 class CaptureTest(unittest.TestCase):
+    def test_refresh_rotates_both_tokens_without_logging_them(self):
+        session = requests.Session()
+        home = MagicMock()
+        home.text = 'falka.falka35'
+        renewed = MagicMock()
+        renewed.json.return_value = {'access_token': 'new-access', 'refresh_token': 'new-refresh'}
+        session.get = MagicMock(return_value=home)
+        session.post = MagicMock(return_value=renewed)
+        with patch('purchase_photo_capture.cloudscraper.create_scraper', return_value=session):
+            buyer = Vinted('access_token_web=old-access; refresh_token_web=old-refresh', force_refresh=True)
+        self.assertEqual(session.post.call_args.args[0], 'https://www.vinted.pl/oauth/token')
+        self.assertEqual(session.post.call_args.kwargs['json']['refresh_token'], 'old-refresh')
+        self.assertIn('access_token_web=new-access', buyer.cookie_header())
+        self.assertIn('refresh_token_web=new-refresh', buyer.cookie_header())
+        self.assertNotIn('old-refresh', buyer.cookie_header())
+
+    def test_encrypted_session_roundtrip_and_tamper_rejection(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / 'session.enc'
+            with patch('purchase_photo_capture.COOKIE', 'bootstrap-secret-with-high-entropy-123456789'), \
+                 patch('purchase_photo_capture.SESSION_FILE', str(target)):
+                save_session_cookie('access_token_web=private; refresh_token_web=renewed')
+                self.assertNotIn(b'private', target.read_bytes())
+                self.assertEqual(load_session_cookie(), 'access_token_web=private; refresh_token_web=renewed')
+                damaged = bytearray(target.read_bytes())
+                damaged[-4] ^= 1
+                target.write_bytes(damaged)
+                with self.assertRaises(Exception):
+                    load_session_cookie()
+
+    def test_access_expiry_triggers_refresh_before_cookie_expiry(self):
+        payload = base64.urlsafe_b64encode(json.dumps({'exp': int(time.time()) + 3600}).encode()).decode().rstrip('=')
+        self.assertTrue(access_token_expires_soon(f'x.{payload}.x'))
+
     def test_buyer_anon_cookie_uses_scoped_domain_when_home_sets_another(self):
         session = requests.Session()
         session.cookies.set('anon_id', 'home', domain='www.vinted.pl')
