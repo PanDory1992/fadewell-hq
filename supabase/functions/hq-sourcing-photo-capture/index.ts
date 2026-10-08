@@ -65,7 +65,7 @@ function validImage(bytes: Uint8Array, type: string): boolean {
 
 async function reconcileRecentPurchases() {
   const { data, error } = await db.from('hq_purchase_photo_ingest_jobs').select('source_event_id')
-    .in('state', ['PENDING', 'NEEDS_REVIEW']).order('created_at', { ascending: false }).limit(50);
+    .in('state', ['PENDING', 'NEEDS_REVIEW', 'CAPTURED']).order('created_at', { ascending: false }).limit(50);
   if (error) throw error;
   for (const job of data || []) {
     const result = await db.rpc('match_hq_sourcing_photos', { p_source_event_id: job.source_event_id });

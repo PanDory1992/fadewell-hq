@@ -1,5 +1,7 @@
 # FADEWELL source capture for Chrome/Edge
 
-Install this directory as an unpacked extension in a Chromium browser. Click its toolbar icon while viewing a concrete Vinted item. It opens the owner-authenticated HQ capture form with the listing URL filled in. Confirm **Zapisz zdjęcia** before buying.
+Open `chrome://extensions` or `edge://extensions`, enable Developer mode, choose **Load unpacked**, and select this directory. Pin the extension to the toolbar. Click its icon while viewing a concrete Vinted item. It opens the owner-authenticated HQ capture form with the listing URL filled in. Confirm **Zapisz zdjęcia** before buying.
+
+On iPhone, use the link-sharing instructions on `https://hq.fadewell.eu/capture.html`. The browser extension cannot run inside the Vinted iOS app.
 
 The extension requests only `activeTab`. It does not read or export Vinted cookies, purchase history or page contents. It sends only the listing URL to HQ through the opened tab.
