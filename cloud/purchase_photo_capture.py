@@ -149,11 +149,17 @@ class Vinted:
         csrf = re.search(r'<meta\s+name="csrf-token"\s+content="([^"]+)"', home.text)
         current_access = self.session.cookies.get("access_token_web", domain=".vinted.pl") or access_token
         if force_refresh or access_token_expires_soon(current_access):
-            self.refresh(html.unescape(csrf.group(1)) if csrf else "")
-            # A rotated refresh token must survive even if a later page read fails.
-            save_session_cookie(self.cookie_header())
-            home = self.session.get("https://www.vinted.pl", timeout=30)
-            home.raise_for_status()
+            try:
+                self.refresh(html.unescape(csrf.group(1)) if csrf else "")
+            except requests.HTTPError as error:
+                if 'falka.falka35' not in home.text:
+                    raise
+                print(f"Vinted token endpoint rejected renewal ({error.response.status_code}); checking existing buyer session")
+            else:
+                # A rotated refresh token must survive even if a later page read fails.
+                save_session_cookie(self.cookie_header())
+                home = self.session.get("https://www.vinted.pl", timeout=30)
+                home.raise_for_status()
         if 'falka.falka35' not in home.text:
             raise RuntimeError("Vinted buyer session is no longer signed in")
         csrf = re.search(r'<meta\s+name="csrf-token"\s+content="([^"]+)"', home.text)

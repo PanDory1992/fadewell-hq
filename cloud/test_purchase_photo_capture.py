@@ -29,6 +29,19 @@ class CaptureTest(unittest.TestCase):
         self.assertIn('refresh_token_web=new-refresh', buyer.cookie_header())
         self.assertNotIn('old-refresh', buyer.cookie_header())
 
+    def test_rejected_refresh_does_not_discard_still_signed_in_session(self):
+        session = requests.Session()
+        home = MagicMock()
+        home.text = 'falka.falka35'
+        response = MagicMock()
+        response.status_code = 401
+        response.raise_for_status.side_effect = requests.HTTPError('401', response=response)
+        session.get = MagicMock(return_value=home)
+        session.post = MagicMock(return_value=response)
+        with patch('purchase_photo_capture.cloudscraper.create_scraper', return_value=session):
+            buyer = Vinted('access_token_web=current; refresh_token_web=old', force_refresh=True)
+        self.assertIn('access_token_web=current', buyer.cookie_header())
+
     def test_encrypted_session_roundtrip_and_tamper_rejection(self):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory) / 'session.enc'
