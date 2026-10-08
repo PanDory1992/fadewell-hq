@@ -15,7 +15,7 @@ class CaptureTest(unittest.TestCase):
     def test_refresh_rotates_both_tokens_without_logging_them(self):
         session = requests.Session()
         home = MagicMock()
-        home.text = 'falka.falka35'
+        home.text = '<meta name="csrf-token" content="csrf-probe">falka.falka35'
         renewed = MagicMock()
         renewed.json.return_value = {'access_token': 'new-access', 'refresh_token': 'new-refresh'}
         session.get = MagicMock(return_value=home)
@@ -24,6 +24,7 @@ class CaptureTest(unittest.TestCase):
             buyer = Vinted('access_token_web=old-access; refresh_token_web=old-refresh', force_refresh=True)
         self.assertEqual(session.post.call_args.args[0], 'https://www.vinted.pl/oauth/token')
         self.assertEqual(session.post.call_args.kwargs['json']['refresh_token'], 'old-refresh')
+        self.assertEqual(session.post.call_args.kwargs['headers']['X-CSRF-Token'], 'csrf-probe')
         self.assertIn('access_token_web=new-access', buyer.cookie_header())
         self.assertIn('refresh_token_web=new-refresh', buyer.cookie_header())
         self.assertNotIn('old-refresh', buyer.cookie_header())

@@ -144,12 +144,16 @@ class Vinted:
         access_token = self.session.cookies.get("access_token_web", domain=".vinted.pl")
         if not access_token:
             raise RuntimeError("Vinted buyer session is missing or incomplete")
-        if force_refresh or access_token_expires_soon(access_token):
-            self.refresh()
-            # A rotated refresh token must survive even if a later page read fails.
-            save_session_cookie(self.cookie_header())
         home = self.session.get("https://www.vinted.pl", timeout=30)
         home.raise_for_status()
+        csrf = re.search(r'<meta\s+name="csrf-token"\s+content="([^"]+)"', home.text)
+        current_access = self.session.cookies.get("access_token_web", domain=".vinted.pl") or access_token
+        if force_refresh or access_token_expires_soon(current_access):
+            self.refresh(html.unescape(csrf.group(1)) if csrf else "")
+            # A rotated refresh token must survive even if a later page read fails.
+            save_session_cookie(self.cookie_header())
+            home = self.session.get("https://www.vinted.pl", timeout=30)
+            home.raise_for_status()
         if 'falka.falka35' not in home.text:
             raise RuntimeError("Vinted buyer session is no longer signed in")
         csrf = re.search(r'<meta\s+name="csrf-token"\s+content="([^"]+)"', home.text)
@@ -160,13 +164,14 @@ class Vinted:
         if csrf:
             self.api_headers["X-CSRF-Token"] = html.unescape(csrf.group(1))
 
-    def refresh(self):
+    def refresh(self, csrf_token=""):
         refresh_token = self.session.cookies.get("refresh_token_web", domain=".vinted.pl")
         if not refresh_token:
             raise RuntimeError("Vinted session has no refresh token")
         response = self.session.post("https://www.vinted.pl/oauth/token",
                                      json={"grant_type": "refresh_token", "refresh_token": refresh_token},
-                                     headers={"Accept": "application/json", "Referer": "https://www.vinted.pl/"}, timeout=30)
+                                     headers={"Accept": "application/json", "Referer": "https://www.vinted.pl/",
+                                              **({"X-CSRF-Token": csrf_token} if csrf_token else {})}, timeout=30)
         response.raise_for_status()
         payload = response.json()
         if not payload.get("access_token"):
