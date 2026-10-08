@@ -197,6 +197,28 @@ def update_job(hq, job, state, error=None):
                       "last_error": error, "updated_at": datetime.utcnow().isoformat() + "Z"})
 
 
+def queue_single_receipt_replay(hq, source_event_id):
+    if not re.fullmatch(r"[0-9a-f]{16,32}", source_event_id):
+        raise ValueError("Replay receipt ID is malformed")
+    events = hq.table("hq_external_events", params={"select": "source_event_id,event_type,state,occurred_at,item_title,amount,vinted_transaction_id,matched_item_id",
+                 "source": "eq.GMAIL_VINTED", "source_event_id": f"eq.{source_event_id}", "limit": "2"})
+    if len(events) != 1:
+        raise RuntimeError("Replay receipt is not uniquely present in HQ")
+    event = events[0]
+    if event["event_type"] != "PURCHASE_CONFIRMED" or event["state"] != "AUTO_APPLIED":
+        raise RuntimeError("Replay receipt is not a confirmed single-item purchase")
+    if not re.fullmatch(r"DEN-\d+", str(event.get("matched_item_id") or "")):
+        raise RuntimeError("Replay receipt has no verified DEN item")
+    if not event.get("vinted_transaction_id") or not event.get("item_title") or event.get("amount") is None:
+        raise RuntimeError("Replay receipt has incomplete Vinted purchase evidence")
+    hq.table("hq_purchase_photo_ingest_jobs?on_conflict=source_event_id", method="POST",
+             prefer="resolution=ignore-duplicates", payload={"source_event_id": source_event_id,
+             "vinted_transaction_id": str(event["vinted_transaction_id"]),
+             "occurred_on": str(event["occurred_at"])[:10], "paid_amount": event["amount"],
+             "receipt_title": event["item_title"], "bundle_titles": [],
+             "den_item_ids": [event["matched_item_id"]]})
+
+
 def process(hq, vinted, orders, job):
     order = matching_order(job, orders)
     transaction = vinted.transaction(order.get("conversation_id") or order.get("conversationId"))
@@ -277,6 +299,9 @@ def main():
             counts.append(len(urls))
         print(f"Vinted buyer access confirmed: {len(ids)} listing(s), photo counts {counts}")
         return
+    replay_receipt_id = os.environ.get("VINTED_REPLAY_RECEIPT_ID", "").strip()
+    if replay_receipt_id:
+        queue_single_receipt_replay(hq, replay_receipt_id)
     jobs = hq.table("hq_purchase_photo_ingest_jobs", params={"select": "*", "state": "eq.PENDING", "order": "created_at.asc", "limit": "30"})
     if not jobs:
         print("No pending purchase-photo jobs")

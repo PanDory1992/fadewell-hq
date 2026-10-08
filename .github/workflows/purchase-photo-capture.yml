@@ -7,6 +7,10 @@ on:
         description: 'Optional read-only Vinted transaction check'
         required: false
         type: string
+      replay_receipt_id:
+        description: 'Optional verified single-item Gmail purchase receipt to recapture'
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -31,4 +35,5 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           VINTED_BUYER_COOKIE: ${{ secrets.VINTED_BUYER_COOKIE }}
           VINTED_PROBE_TRANSACTION_ID: ${{ inputs.probe_transaction_id }}
+          VINTED_REPLAY_RECEIPT_ID: ${{ inputs.replay_receipt_id }}
         run: python cloud/purchase_photo_capture.py
