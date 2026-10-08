@@ -2,6 +2,11 @@ name: Capture Vinted Purchase Photos
 
 on:
   workflow_dispatch:
+    inputs:
+      probe_transaction_id:
+        description: 'Optional read-only Vinted transaction check'
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -25,4 +30,5 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           VINTED_BUYER_COOKIE: ${{ secrets.VINTED_BUYER_COOKIE }}
+          VINTED_PROBE_TRANSACTION_ID: ${{ inputs.probe_transaction_id }}
         run: python cloud/purchase_photo_capture.py

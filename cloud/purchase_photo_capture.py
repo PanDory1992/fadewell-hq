@@ -255,6 +255,28 @@ def main():
     if not HQ_URL or not HQ_KEY:
         raise RuntimeError("HQ service credentials are not configured")
     hq = Hq()
+    probe_transaction_id = os.environ.get("VINTED_PROBE_TRANSACTION_ID", "").strip()
+    if probe_transaction_id:
+        if not re.fullmatch(r"\d+", probe_transaction_id):
+            raise ValueError("Probe transaction ID must be numeric")
+        if not COOKIE:
+            raise RuntimeError("Vinted buyer session is not configured")
+        vinted = Vinted()
+        matches = [row for row in vinted.orders() if str(row.get("transaction_id") or row.get("transactionId")) == probe_transaction_id]
+        if len(matches) != 1:
+            raise RuntimeError("Probe transaction is not uniquely present in buyer order history")
+        transaction = vinted.transaction(matches[0].get("conversation_id") or matches[0].get("conversationId"))
+        if str(transaction.get("id")) != probe_transaction_id:
+            raise RuntimeError("Probe conversation belongs to another transaction")
+        ids = [str(value) for value in transaction.get("item_ids") or []]
+        if not ids:
+            raise RuntimeError("Probe transaction has no listing IDs")
+        counts = []
+        for listing_id in ids:
+            _, urls = vinted.listing(listing_id)
+            counts.append(len(urls))
+        print(f"Vinted buyer access confirmed: {len(ids)} listing(s), photo counts {counts}")
+        return
     jobs = hq.table("hq_purchase_photo_ingest_jobs", params={"select": "*", "state": "eq.PENDING", "order": "created_at.asc", "limit": "30"})
     if not jobs:
         print("No pending purchase-photo jobs")
