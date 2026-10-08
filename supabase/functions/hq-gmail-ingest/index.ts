@@ -31,6 +31,13 @@ const verifyGoogleIdentity = async (authorization: string) => {
   }
 };
 const norm = (value: string | null | undefined) => (value || '').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, ' ').trim();
+const purchaseSeller = (body: string) => {
+  const lines = nonEmptyLines(body);
+  const index = lines.findIndex((line: string) => /^Seller(?:\s|$)/i.test(line));
+  if (index < 0) return null;
+  const value = lines[index].replace(/^Seller\s*:?[\s]*/i, '') || lines[index + 1] || '';
+  return /^[\p{L}\p{N}._-]{2,50}$/u.test(value) ? value : null;
+};
 const safeNormalizedText = (body: string) => {
   const all = nonEmptyLines(body.replace(/https?:\/\/\S+/gi, '[link redacted]'));
   const safe: string[] = []; let redactAddressBlock = false; let redactSeller = false;
@@ -200,9 +207,11 @@ Deno.serve(async request => {
         }
         const queued = await rest('hq_purchase_photo_ingest_jobs?on_conflict=source_event_id', {
           method: 'POST', headers: { prefer: 'resolution=ignore-duplicates' },
-          body: JSON.stringify({ source_event_id: message.gmail_message_id, vinted_transaction_id: transaction, occurred_on: message.received_at.slice(0, 10), paid_amount: amount, receipt_title: itemTitle, bundle_titles: bundleItems, den_item_ids: denIds })
+          body: JSON.stringify({ source_event_id: message.gmail_message_id, vinted_transaction_id: transaction, occurred_on: message.received_at.slice(0, 10), paid_amount: amount, receipt_title: itemTitle, seller_name: purchaseSeller(message.body), bundle_titles: bundleItems, den_item_ids: denIds })
         });
         if (!queued.ok) throw new Error(`Purchase photo job ${message.gmail_message_id} was not queued: ${await queued.text()}`);
+        const matched = await rest('rpc/match_hq_sourcing_photos', { method: 'POST', body: JSON.stringify({ p_source_event_id: message.gmail_message_id }) });
+        if (!matched.ok) throw new Error(`Pre-purchase photo match ${message.gmail_message_id} failed: ${await matched.text()}`);
       }
       if (eventType === 'SALE_PENDING' && outcome.state === 'NEEDS_REVIEW') {
         const reconciliation = await rest('rpc/reconcile_hq_manual_sale_evidence', { method: 'POST', body: JSON.stringify({ p_source_event_id: message.gmail_message_id }) });

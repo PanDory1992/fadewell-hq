@@ -22,7 +22,7 @@ const latestCursor=changes=>changes.length?Number(changes[changes.length-1].id):
 const changedEntities=changes=>new Set((changes||[]).map(change=>String(change.entity||'')));
 const loadSnapshotCycles=async()=>{const {data,error}=await sb.rpc('hq_browser_listing_cycles');if(error)throw error;return Array.isArray(data?.snapshots)?data.snapshots:[]};
 
-const pages=[['index.html','Dziś','today'],['operations.html','Sprawy','today'],['kpi.html','KPI','money'],['finance.html','Finanse','money'],['storefront.html','Storefront','growth'],['pricing.html','Ceny','money'],['ledger.html','Ledger','stock'],['wardrobe.html','Live wardrobe','stock'],['triage.html','Triage','stock'],['item-dna.html','Item DNA','stock'],['sourcing.html','Sourcing','stock'],['actions.html','Akcje','actions'],['system.html','System','system']];
+const pages=[['index.html','Dziś','today'],['operations.html','Sprawy','today'],['kpi.html','KPI','money'],['finance.html','Finanse','money'],['storefront.html','Storefront','growth'],['pricing.html','Ceny','money'],['ledger.html','Ledger','stock'],['wardrobe.html','Live wardrobe','stock'],['triage.html','Triage','stock'],['item-dna.html','Item DNA','stock'],['sourcing.html','Sourcing','stock'],['capture.html','Zapisz ofertę','stock'],['actions.html','Akcje','actions'],['system.html','System','system']];
 
 pages.splice(pages.findIndex(page=>page[0]==='kpi.html'),1);
 
