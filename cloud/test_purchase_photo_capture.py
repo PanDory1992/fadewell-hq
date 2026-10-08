@@ -55,8 +55,10 @@ class CaptureTest(unittest.TestCase):
                 damaged = bytearray(target.read_bytes())
                 damaged[-4] ^= 1
                 target.write_bytes(damaged)
-                with self.assertRaises(Exception):
-                    load_session_cookie()
+                self.assertEqual(load_session_cookie(), 'bootstrap-secret-with-high-entropy-123456789')
+                with patch('purchase_photo_capture.COOKIE', 'new-authorized-bootstrap-secret'):
+                    save_session_cookie('access_token_web=new; refresh_token_web=rotated')
+                    self.assertEqual(load_session_cookie(), 'access_token_web=new; refresh_token_web=rotated')
 
     def test_access_expiry_triggers_refresh_before_cookie_expiry(self):
         payload = base64.urlsafe_b64encode(json.dumps({'exp': int(time.time()) + 3600}).encode()).decode().rstrip('=')

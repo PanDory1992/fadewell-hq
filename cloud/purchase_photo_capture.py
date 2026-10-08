@@ -7,6 +7,7 @@ Every downloaded photo is retained even when a same-title bundle needs review.
 
 import html
 import base64
+import binascii
 import hashlib
 import json
 import os
@@ -21,6 +22,7 @@ from urllib.parse import urlparse
 import cloudscraper
 import requests
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from cryptography.exceptions import InvalidTag
 
 
 HQ_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
@@ -44,10 +46,18 @@ def _session_key():
 def load_session_cookie():
     if not SESSION_FILE or not Path(SESSION_FILE).exists():
         return COOKIE
-    sealed = base64.b64decode(Path(SESSION_FILE).read_bytes(), validate=True)
-    if len(sealed) < 29:
-        raise RuntimeError("Encrypted Vinted session cache is invalid")
-    return AESGCM(_session_key()).decrypt(sealed[:12], sealed[12:], SESSION_AAD).decode("utf-8")
+    try:
+        sealed = base64.b64decode(Path(SESSION_FILE).read_bytes(), validate=True)
+        if len(sealed) < 29:
+            raise ValueError("invalid encrypted session cache")
+        return AESGCM(_session_key()).decrypt(sealed[:12], sealed[12:], SESSION_AAD).decode("utf-8")
+    except (InvalidTag, ValueError, UnicodeDecodeError, binascii.Error):
+        # A newly authorized bootstrap secret cannot decrypt the previous
+        # cache. Use that secret and seal a fresh state in this run.
+        if not COOKIE:
+            raise RuntimeError("Vinted buyer session cache is invalid and no bootstrap secret is configured")
+        print("Vinted buyer session cache unreadable; using current bootstrap secret")
+        return COOKIE
 
 
 def save_session_cookie(cookie_header):
