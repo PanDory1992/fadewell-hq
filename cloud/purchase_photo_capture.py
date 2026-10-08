@@ -104,7 +104,7 @@ class Vinted:
             raise RuntimeError("Vinted buyer session is no longer signed in")
         csrf = re.search(r'<meta\s+name="csrf-token"\s+content="([^"]+)"', home.text)
         self.api_headers = {"Accept": "application/json, text/plain, */*", "Platform": "web", "Locale": "en-PL", "Referer": "https://www.vinted.pl/", "x-next-app": "marketplace-web"}
-        anon = self.session.cookies.get("anon_id")
+        anon = self.session.cookies.get("anon_id", domain=".vinted.pl")
         if anon:
             self.api_headers["X-Anon-Id"] = anon
         if csrf:

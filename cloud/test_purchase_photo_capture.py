@@ -1,10 +1,23 @@
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
-from purchase_photo_capture import first_product_photos, main, matching_order, preloaded_orders, unique_bundle_mapping
+import requests
+
+from purchase_photo_capture import Vinted, first_product_photos, main, matching_order, preloaded_orders, unique_bundle_mapping
 
 
 class CaptureTest(unittest.TestCase):
+    def test_buyer_anon_cookie_uses_scoped_domain_when_home_sets_another(self):
+        session = requests.Session()
+        session.cookies.set('anon_id', 'home', domain='www.vinted.pl')
+        response = MagicMock()
+        response.text = 'falka.falka35'
+        session.get = MagicMock(return_value=response)
+        with patch('purchase_photo_capture.COOKIE', 'access_token_web=test; anon_id=buyer'), \
+             patch('purchase_photo_capture.cloudscraper.create_scraper', return_value=session):
+            buyer = Vinted()
+        self.assertEqual(buyer.api_headers['X-Anon-Id'], 'buyer')
+
     def test_empty_queue_does_not_need_vinted_session(self):
         class EmptyHq:
             def table(self, *_args, **_kwargs):
