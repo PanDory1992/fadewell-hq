@@ -12,18 +12,20 @@ from purchase_photo_capture import Vinted, access_token_expires_soon, first_prod
 
 
 class CaptureTest(unittest.TestCase):
-    def test_refresh_rotates_both_tokens_without_logging_them(self):
+    def test_refresh_rotates_both_tokens_from_current_web_endpoint(self):
         session = requests.Session()
         home = MagicMock()
         home.text = '<meta name="csrf-token" content="csrf-probe">falka.falka35'
         renewed = MagicMock()
-        renewed.json.return_value = {'access_token': 'new-access', 'refresh_token': 'new-refresh'}
+        renewed.cookies = requests.cookies.RequestsCookieJar()
+        renewed.cookies.set('access_token_web', 'new-access', domain='www.vinted.pl')
+        renewed.cookies.set('refresh_token_web', 'new-refresh', domain='www.vinted.pl')
         session.get = MagicMock(return_value=home)
         session.post = MagicMock(return_value=renewed)
         with patch('purchase_photo_capture.cloudscraper.create_scraper', return_value=session):
             buyer = Vinted('access_token_web=old-access; refresh_token_web=old-refresh', force_refresh=True)
-        self.assertEqual(session.post.call_args.args[0], 'https://www.vinted.pl/oauth/token')
-        self.assertEqual(session.post.call_args.kwargs['json']['refresh_token'], 'old-refresh')
+        self.assertEqual(session.post.call_args.args[0], 'https://www.vinted.pl/web/api/auth/refresh')
+        self.assertNotIn('json', session.post.call_args.kwargs)
         self.assertEqual(session.post.call_args.kwargs['headers']['X-CSRF-Token'], 'csrf-probe')
         self.assertIn('access_token_web=new-access', buyer.cookie_header())
         self.assertIn('refresh_token_web=new-refresh', buyer.cookie_header())

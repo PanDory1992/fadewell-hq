@@ -171,22 +171,21 @@ class Vinted:
             self.api_headers["X-CSRF-Token"] = html.unescape(csrf.group(1))
 
     def refresh(self, csrf_token=""):
-        refresh_token = self.session.cookies.get("refresh_token_web", domain=".vinted.pl")
-        if not refresh_token:
+        old_access = self.session.cookies.get("access_token_web", domain=".vinted.pl")
+        old_refresh = self.session.cookies.get("refresh_token_web", domain=".vinted.pl")
+        if not old_refresh:
             raise RuntimeError("Vinted session has no refresh token")
-        response = self.session.post("https://www.vinted.pl/oauth/token",
-                                     json={"grant_type": "refresh_token", "refresh_token": refresh_token},
+        response = self.session.post("https://www.vinted.pl/web/api/auth/refresh",
                                      headers={"Accept": "application/json", "Referer": "https://www.vinted.pl/",
                                               **({"X-CSRF-Token": csrf_token} if csrf_token else {})}, timeout=30)
         response.raise_for_status()
-        payload = response.json()
-        if not payload.get("access_token"):
-            raise RuntimeError("Vinted refresh returned no access token")
-        self.session.cookies.set("access_token_web", payload["access_token"], domain=".vinted.pl")
-        if payload.get("refresh_token"):
-            self.session.cookies.set("refresh_token_web", payload["refresh_token"], domain=".vinted.pl")
-        renewed = payload.get("refresh_token") or response.cookies.get("refresh_token_web") or self.session.cookies.get("refresh_token_web", domain=".vinted.pl")
-        print(f"Vinted access refreshed; refresh token rotated: {renewed != refresh_token}")
+        for cookie in response.cookies:
+            if cookie.name in {"access_token_web", "refresh_token_web"}:
+                self.session.cookies.set(cookie.name, cookie.value, domain=".vinted.pl")
+        if (self.session.cookies.get("access_token_web", domain=".vinted.pl") == old_access
+                and self.session.cookies.get("refresh_token_web", domain=".vinted.pl") == old_refresh):
+            raise RuntimeError("Vinted refresh returned no rotated buyer cookies")
+        print("Vinted buyer session refreshed")
 
     def cookie_header(self):
         cookies = {cookie.name: cookie.value for cookie in self.session.cookies
