@@ -139,6 +139,14 @@ def known_den_listing_ids():
         ids.update(str(row["vinted_item_id"]) for row in response.json())
     return ids
 
+def rec_listing_ids():
+    """Owner-classified personal listings are outside every DEN collector pass."""
+    response = requests.get(f"{SUPABASE_URL}/rest/v1/hq_rec_vinted_items", headers=DB_HEADERS,
+                            params={"select": "vinted_item_id", "limit": "1000"}, timeout=60)
+    response.raise_for_status()
+    return {str(row["vinted_item_id"]) for row in response.json()}
+
+
 def unresolved_live_listings(live_items, linked_ids):
     """Retry a safe relist match until an active listing is actually linked.
 
@@ -202,11 +210,11 @@ def main():
         return
     run_id = lease["run_id"]
     try:
-        excluded = set(SCOPE["excluded_live_vinted_ids"]); known_den_ids = known_den_listing_ids(); captured_at = datetime.now(timezone.utc).isoformat(); rows = []; live_items = []; excluded_active = []
+        rec_ids = rec_listing_ids(); excluded = set(SCOPE["excluded_live_vinted_ids"]) | rec_ids; known_den_ids = known_den_listing_ids(); captured_at = datetime.now(timezone.utc).isoformat(); rows = []; live_items = []; excluded_active = []
         for item in fetch_items():
             item_id = str(item["id"])
             if item_id in excluded:
-                excluded_active.append({"vinted_item_id": item_id, "title": item.get("title") or None, "reason": "manual scope exclusion"})
+                excluded_active.append({"vinted_item_id": item_id, "title": item.get("title") or None, "reason": "owner REC decision" if item_id in rec_ids else "manual scope exclusion"})
                 continue
             live_items.append(item)
             photos = item.get("photos") or []; photo = item.get("photo") or (photos[0] if photos else {}); high = photo.get("high_resolution") or {}

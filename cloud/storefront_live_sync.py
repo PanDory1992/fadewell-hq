@@ -15,7 +15,7 @@ from storefront_sync import (
     is_den_scope_excluded, sync_hq_catalog_metadata,
     upsert_storefront_catalog_observations, upsert_storefront_records,
 )
-from vinted_snapshot_sync import HEADERS, fetch_items
+from vinted_snapshot_sync import HEADERS, fetch_items, rec_listing_ids
 
 SUPABASE_URL = os.environ["SUPABASE_URL"].rstrip("/")
 SERVICE_KEY = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
@@ -113,7 +113,9 @@ def detail_candidates(catalog_items, existing, *, slot=None, shards=DETAIL_REFRE
 def main():
     session = cloudscraper.create_scraper()
     session.get("https://www.vinted.pl", headers=HEADERS, timeout=30)
-    catalog_items = list(fetch_items(session=session))
+    rec_ids = rec_listing_ids()
+    catalog_items = [item for item in fetch_items(session=session)
+                     if str(item["id"]) not in rec_ids]
     try:
         catalog_paths = fetch_catalog_paths(session)
     except requests.HTTPError as error:
@@ -135,8 +137,11 @@ def main():
             if observation.get(key) in (None, "", []):
                 observation[key] = previous.get(key)
         observations.append(observation)
-    upsert_storefront_catalog_observations(SUPABASE_URL, SERVICE_KEY, observations)
-    hq_changed = sync_hq_catalog_metadata(SUPABASE_URL, SERVICE_KEY, observations)
+    if observations:
+        upsert_storefront_catalog_observations(SUPABASE_URL, SERVICE_KEY, observations)
+        hq_changed = sync_hq_catalog_metadata(SUPABASE_URL, SERVICE_KEY, observations)
+    else:
+        hq_changed = 0
     records, failures, deferred = [], [], 0
     detail_blocked = False
     candidates = detail_candidates(catalog_items, existing, owner_measurements=owner_measurements)

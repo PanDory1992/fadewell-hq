@@ -18,7 +18,8 @@ class StorefrontLiveSyncTests(unittest.TestCase):
             'description': 'Waist 38 cm\nRise 31 cm\nInseam 79 cm\nLeg opening 18.5 cm',
             'photos': [{'url': 'cover.jpg'}]}
         external_results = {
-            'fetch_items': [detail], 'fetch_catalog_paths': {},
+            'fetch_items': [detail, {'id': 10676144074, 'title': 'Personal guitar'}],
+            'rec_listing_ids': {'10676144074'}, 'fetch_catalog_paths': {},
             'fetch_owner_measurements': {'10038070683': {
                 'overall_length': {'cm': 109, 'source': 'OWNER_CONFIRMED'}}},
             'fetch_storefront_records': [], 'fetch_detail_with_retries': detail,
@@ -31,7 +32,7 @@ class StorefrontLiveSyncTests(unittest.TestCase):
             stack.enter_context(patch('storefront_live_sync.time.sleep'))
             for name, result in external_results.items():
                 stack.enter_context(patch(f'storefront_live_sync.{name}', return_value=result))
-            stack.enter_context(patch('storefront_live_sync.upsert_storefront_catalog_observations'))
+            observations = stack.enter_context(patch('storefront_live_sync.upsert_storefront_catalog_observations'))
             write = stack.enter_context(patch('storefront_live_sync.upsert_storefront_records'))
             stack.enter_context(patch('storefront_live_sync.record_storefront_sync_result'))
             live.main()
@@ -39,6 +40,7 @@ class StorefrontLiveSyncTests(unittest.TestCase):
             self.assertTrue(record['published'])
             self.assertEqual(record['measurements']['overall_length']['cm'], 109)
             self.assertEqual(record['description_raw'], detail['description'])
+            self.assertEqual([row['vinted_item_id'] for row in observations.call_args.args[2]], ['10038070683'])
 
     def test_changed_owner_measurement_refreshes_published_pair_outside_rotating_shard(self):
         existing = {'123': {'published': True,

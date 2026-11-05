@@ -24,7 +24,7 @@ assert.match(operations,/relistCandidates/);
 assert.match(relistMigration,/create table if not exists public\.hq_vinted_relist_candidates/);
 assert.match(relistMigration,/actor = 'MANUAL' and current_new_count < 1/);
 assert.match(relistMigration,/record_hq_relist_candidate/);
-assert.match(hq,/const cacheKey='fadewell-hq-data-v6'/);
+assert.match(hq,/const cacheKey='fadewell-hq-data-v7'/);
 assert.doesNotMatch(hq,/JSON\.stringify\(value\)\.length>1500000/,'The browser cache must not silently stop growing at 1.5 MB.');
 assert.match(hq,/async function refreshChangedData/,'The cache must refresh changed source collections without reloading all HQ data.');
 assert.match(hq,/hq_listing_snapshots','hq_ledger_items','hq_review_queue','hq_ledger_events','hq_external_events/,'Every browser delta source must have an incremental route.');
